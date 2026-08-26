@@ -869,16 +869,17 @@
   </div>
 
 <script>
-// =================================================================
-// 【URL設定】ここに発行されたWeb App URLを貼り付けておくと自動で読み込まれます
-// =================================================================
-const DEFAULT_GAS_URL = ""; // 例: "https://script.google.com/macros/s/AKfycb.../exec"
+// ==========================================
+// フロントエンド制御ロジック (店舗切替・オーバーレイ・楽観的ロック対応)
+// ==========================================
 
-let gasUrl = localStorage.getItem('gasUrl') || DEFAULT_GAS_URL;
-let storeList = ['博多住吉通り店', '清川二丁目店'];
-let currentStore = '清川二丁目店';
-let isLoadedFromSheets = false;
-let autoSaveTimer = null;
+const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
+
+// アプリの内部状態
+let currentStoreId = localStorage.getItem("current_store_id") || "store_A"; // デフォルト店舗
+let lastUpdatedTimestamp = "";
+let isDirty = false; // 未保存の変更があるかどうか
+let shiftData = {};  // シフトデータ本体
 
 let slotData = [
   { name: '朝勤', start: '08:00', end: '13:00', slots: 1, colorClass: 'bg-morning' },
@@ -903,7 +904,87 @@ const HISTORICAL_6MONTH_DATA = {
   'プラティ': { prescribed: 133, urgentOff: 0, reqOff: 0, helpCount: 0 },
   '山領': { prescribed: 106, urgentOff: 0, reqOff: 2, helpCount: 0 }
 };
-
+  // 1. データの読み込み (起動時 / 手動同期ボタン押下時)
+async function loadDataFromCloud() {
+  showOverlay("データを読み込んでいます...");
+  try {
+    const url = `${GAS_URL}?storeId=${encodeURIComponent(currentStoreId)}`;
+    const response = await fetch(url);
+    const result = await response.json();
+    
+    if (result.status === "success") {
+      shiftData = result.data || {};
+      lastUpdatedTimestamp = result.lastUpdated || "";
+      isDirty = false;
+      renderApp(); // 画面にデータを描画する関数
+      showToast("最新データを読み込みました");
+    } else {
+      alert("読み込みエラー: " + result.message);
+    }
+  } catch (error) {
+    console.error(error);
+    alert("通信エラーが発生しました。オフラインモードで動作します。");
+    // オフライン時はローカルストレージからフォールバック
+    const localFallback = localStorage.getItem(`shift_data_backup_${currentStoreId}`);
+    if (localFallback) {
+      shiftData = JSON.parse(localFallback);
+      renderApp();
+    }
+  } finally {
+    hideOverlay();
+  }
+}
+// 2. データの保存 (手動保存ボタン押下時 / 画面遷移時)
+async function saveDataToCloud(isManual = true) {
+  // オーバーレイ表示
+  showOverlay("データを保存しています...");
+  
+  const payload = {
+    storeId: currentStoreId,
+    lastUpdated: lastUpdatedTimestamp,
+    data: shiftData
+  };
+  
+  try {
+    const response = await fetch(GAS_URL, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+    
+    if (result.status === "success") {
+      lastUpdatedTimestamp = result.lastUpdated;
+      isDirty = false;
+      localStorage.removeItem(`shift_data_backup_${currentStoreId}`); // バックアップクリア
+      if (isManual) alert("保存が完了しました！");
+      return true;
+    } else if (result.status === "conflict") {
+      // 楽観的ロック競合発生時の処理
+      hideOverlay();
+      const overwrite = confirm("【警告】他の端末でデータが更新されています。\n上書きしますか？（キャンセルすると最新データが読み込まれます）");
+      if (overwrite) {
+        // タイムスタンプを強制クリアして再送する場合の処理など
+        lastUpdatedTimestamp = result.serverLastUpdated;
+        return await saveDataToCloud(isManual);
+      } else {
+        await loadDataFromCloud();
+        return false;
+      }
+    } else {
+      alert("保存エラー: " + result.message);
+      saveToLocalStorageBackup();
+      return false;
+    }
+  } catch (error) {
+    console.error(error);
+    alert("通信に失敗しました。データをローカルに一時保存しました。");
+    saveToLocalStorageBackup();
+    return false;
+  } finally {
+    hideOverlay();
+  }
+}
+  
 // =================================================================
 // 日本の祝日（ハッピーマンデー・春分秋分・振替休日対応）自動算出関数
 // =================================================================
@@ -1032,13 +1113,54 @@ function promptRenameStore() {
   }
 }
 
-function switchStore(storeName) {
-  currentStore = storeName;
-  isLoadedFromSheets = false;
-  document.getElementById('off-staff-select').innerHTML = '';
-  loadAllFromSheets();
+// 3. 未保存チェック ＆ 店舗切り替え処理
+async function switchStore(newStoreId) {
+  if (isDirty) {
+    const confirmSave = confirm("保存されていない変更があります。保存してから店舗を切り替えますか？");
+    if (confirmSave) {
+      const success = await saveDataToCloud(false);
+      if (!success) return; // 保存に失敗したら切り替え中止
+    }
+  }
+  
+  currentStoreId = newStoreId;
+  localStorage.setItem("current_store_id", currentStoreId);
+  await loadDataFromCloud();
+}
+// 4. ローカルストレージへの緊急バックアップ
+function saveToLocalStorageBackup() {
+  localStorage.setItem(`shift_data_backup_${currentStoreId}`, JSON.stringify(shiftData));
 }
 
+// 5. オーバーレイ制御UI
+function showOverlay(message) {
+  let overlay = document.getElementById("app-loading-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "app-loading-overlay";
+    overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:bold;";
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `<div style="background:#fff;color:#333;padding:20px 30px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">${message}</div>`;
+  overlay.style.display = "flex";
+}
+
+function hideOverlay() {
+  const overlay = document.getElementById("app-loading-overlay");
+  if (overlay) overlay.style.display = "none";
+}
+
+function showToast(msg) {
+  // 簡易トースト表示（必要に応じて）
+  console.log(msg);
+}
+  // 6. 画面を閉じようとした時の未保存警告
+window.addEventListener("beforeunload", (e) => {
+  if (isDirty) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
 function recalculateAll() {
   const minWage = parseFloat(document.getElementById('min-wage').value) || 992;
   const nightRate = parseFloat(document.getElementById('night-rate').value) || 1.25;
