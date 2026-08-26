@@ -255,7 +255,96 @@ function addStaffRow() {
   autoSave();
 }
 
-function renderFixedShiftTable() {}
+// ==========================================
+// ③ 固定シフト表 ＆ サイドバー集計ロジック
+// ==========================================
+
+function renderFixedShiftTable() {
+  let tbody = document.getElementById('fixed-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  let rowCounter = 0;
+
+  slotData.forEach((item) => {
+    for (let i = 1; i <= item.slots; i++) {
+      rowCounter++;
+      let tr = document.createElement('tr');
+      let html = `<td><strong>${item.name}</strong><br><small style="color:gray;">(${item.start}-${item.end})</small></td><td>枠${i}</td>`;
+      
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        let key = `${rowCounter}_${dayIdx}`;
+        let assignedVal = fixedAssignments[key] || '';
+
+        let staffOptHtml = `<select class="editable-input" style="font-size:12px;" onchange="updateAssignment('${key}', this.value)">`;
+        staffOptHtml += '<option value="">-- 未設定 --</option>';
+
+        staffList.forEach(s => {
+          let daysText = (s.days && s.days.length > 0) ? s.days.join('') : '希望なし';
+          let timeText = s.time || '全時間帯';
+          let label = `${s.name} (希望:${daysText} / ${timeText})`;
+          let sel = (assignedVal === s.name) ? 'selected' : '';
+          staffOptHtml += `<option value="${s.name}" ${sel}>${label}</option>`;
+        });
+        staffOptHtml += '</select>';
+
+        html += `<td>${staffOptHtml}</td>`;
+      }
+
+      tr.innerHTML = html;
+      tbody.appendChild(tr);
+    }
+  });
+
+  updateSidebarStats();
+}
+function updateAssignment(key, nameVal) {
+  fixedAssignments[key] = nameVal;
+  renderFixedShiftTable();
+  autoSave();
+}
+
+function updateSidebarStats() {
+  let sidebarContainer = document.getElementById('sidebar-staff-list');
+  if (!sidebarContainer) return;
+  sidebarContainer.innerHTML = '';
+
+  let statsMap = {};
+  staffList.forEach(s => { statsMap[s.name] = { slotsCount: 0, totalHours: 0 }; });
+
+  let rowCounter = 0;
+  slotData.forEach((item) => {
+    let dur = calcDuration(item.start, item.end);
+    for (let i = 1; i <= item.slots; i++) {
+      rowCounter++;
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        let key = `${rowCounter}_${dayIdx}`;
+        let assignedName = fixedAssignments[key];
+        if (assignedName && statsMap[assignedName]) {
+          statsMap[assignedName].slotsCount += 1;
+          statsMap[assignedName].totalHours += dur;
+        }
+      }
+    }
+  });
+
+  staffList.forEach(s => {
+    let stat = statsMap[s.name] || { slotsCount: 0, totalHours: 0 };
+    let card = document.createElement('div');
+    card.className = 'sidebar-staff-card';
+    card.innerHTML = `
+      <div class="sidebar-staff-name">
+        <span>${s.name}</span>
+        <span class="sidebar-stat-badge">${stat.totalHours.toFixed(1)} h/週</span>
+      </div>
+      <div style="color:var(--text-muted); display:flex; justify-content:space-between;">
+        <span>固定シフト: <strong>${stat.slotsCount} 枠</strong></span>
+        <span>(希望: ${(s.days||[]).join('') || 'なし'})</span>
+      </div>
+    `;
+    sidebarContainer.appendChild(card);
+  });
+}
 function renderCalendarTab() {}
 function renderOffInputTab() {}
 function renderHelpTab() {}
