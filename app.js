@@ -235,18 +235,49 @@ function renderStaffTable() {
   let tbody = document.getElementById('staff-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
+
   staffList.forEach((s, idx) => {
     let tr = document.createElement('tr');
+
+    // ① 希望曜日のチェックボックス群を生成
+    let dowHtml = '<div class="dow-group">';
+    DOW_OPTIONS.forEach(d => {
+      let checked = (s.days && s.days.includes(d)) ? 'checked' : '';
+      dowHtml += `<label class="dow-item"><input type="checkbox" ${checked} onchange="toggleStaffDow(${idx}, '${d}')"> ${d}</label>`;
+    });
+    dowHtml += '</div>';
+
+    // ② 希望時間帯のセレクトボックスを生成
+    let timeHtml = `<select class="editable-input" onchange="staffList[${idx}].time = this.value; renderStaffTable(); autoSave();">`;
+    let timeOptions = ['全時間帯', ...slotData.map(x => x.name)];
+    timeOptions.forEach(tOpt => {
+      let sel = (s.time === tOpt) ? 'selected' : '';
+      timeHtml += `<option value="${tOpt}" ${sel}>${tOpt}</option>`;
+    });
+    timeHtml += '</select>';
+
     tr.innerHTML = `
       <td><input type="text" class="editable-input" value="${s.id || ''}" onchange="staffList[${idx}].id=this.value; autoSave();"></td>
       <td><input type="text" class="editable-input" value="${s.name || ''}" onchange="staffList[${idx}].name=this.value; autoSave();"></td>
-      <td>（希望設定）</td>
-      <td>（時間設定）</td>
+      <td>${dowHtml}</td>
+      <td>${timeHtml}</td>
       <td><input type="text" class="editable-input" value="${s.note || ''}" onchange="staffList[${idx}].note=this.value; autoSave();"></td>
       <td><button class="btn btn-danger" onclick="staffList.splice(${idx},1); renderStaffTable(); autoSave();">削除</button></td>
     `;
     tbody.appendChild(tr);
   });
+}
+
+// 曜日のチェックが切り替わったときに配列を更新するヘルパー関数
+function toggleStaffDow(idx, day) {
+  if (!staffList[idx].days) staffList[idx].days = [];
+  let arr = staffList[idx].days;
+  if (arr.includes(day)) {
+    staffList[idx].days = arr.filter(x => x !== day);
+  } else {
+    staffList[idx].days.push(day);
+  }
+  autoSave();
 }
 
 function addStaffRow() {
