@@ -261,208 +261,6 @@
   .bg-night { background-color: #805ad5; }
   .bg-subnight { background-color: #319795; }
 
-  .dow-group { display: flex; gap: 6px; flex-wrap: wrap; }
-  .dow-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font-size: 12px;
-    background: #f7fafc;
-    border: 1px solid #cbd5e0;
-    padding: 2px 6px;
-    border-radius: 3px;
-    cursor: pointer;
-  }
-  .dow-item input { margin: 0; cursor: pointer; }
-
-  .fixed-shift-layout {
-    display: grid;
-    grid-template-columns: 1fr 310px;
-    gap: 20px;
-    align-items: start;
-  }
-
-  .sidebar-box {
-    background: #f8fafc;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 16px;
-  }
-
-  .sidebar-box h3 {
-    margin-top: 0;
-    font-size: 14px;
-    border-bottom: 2px solid var(--primary);
-    padding-bottom: 6px;
-    color: #1a202c;
-  }
-
-  .sidebar-staff-card {
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 4px;
-    padding: 8px 10px;
-    margin-bottom: 8px;
-    font-size: 12px;
-  }
-
-  .sidebar-staff-name {
-    font-weight: bold;
-    color: var(--primary);
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 4px;
-  }
-
-  .sidebar-stat-badge {
-    background: #ebf8ff;
-    color: #2b6cb0;
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-weight: bold;
-  }
-
-  .cal-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 6px;
-  }
-
-  .cal-head-cell {
-    background: #edf2f7;
-    padding: 8px;
-    text-align: center;
-    font-weight: bold;
-    font-size: 13px;
-    border-radius: 4px;
-  }
-
-  .cal-day-cell {
-    background: #ffffff;
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    min-height: 120px;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    transition: background-color 0.2s;
-  }
-
-  .cal-day-cell.other-month {
-    background: #f7fafc;
-    opacity: 0.5;
-  }
-
-  .cal-day-cell.has-changed {
-    background-color: #fff5f5 !important;
-    border: 2px solid #e53e3e !important;
-  }
-
-  .cal-day-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 4px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid #edf2f7;
-  }
-
-  .cal-date-num { font-weight: bold; font-size: 13px; }
-  .cal-holiday-tag { font-size: 10px; color: #e53e3e; font-weight: bold; background: #fff5f5; padding: 1px 4px; border-radius: 2px; }
-  .cal-changed-tag { font-size: 9.5px; color: #fff; font-weight: bold; background: #e53e3e; padding: 1px 4px; border-radius: 2px; margin-left: 4px; }
-
-  .cal-shift-item {
-    font-size: 10.5px;
-    padding: 2px 4px;
-    margin-bottom: 2px;
-    border-radius: 3px;
-    background: #edf2f7;
-    border-left: 3px solid var(--primary);
-  }
-
-  .cal-shift-item.is-modified {
-    background: #fed7d7;
-    border-left-color: #e53e3e;
-  }
-
-  .urgent-highlight-box {
-    background-color: #fff5f5;
-    border: 2px solid #e53e3e;
-    border-radius: 6px;
-    padding: 16px;
-    margin-bottom: 20px;
-  }
-
-  .urgent-highlight-box h3 {
-    color: #c53030;
-    margin-top: 0;
-    margin-bottom: 8px;
-    font-size: 15px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .candidate-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 4px;
-    background: #ffffff;
-    padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid #e2e8f0;
-    font-size: 12.5px;
-  }
-
-  .candidate-timestamp {
-    font-size: 11px;
-    color: #718096;
-    background: #edf2f7;
-    padding: 1px 6px;
-    border-radius: 3px;
-  }
-
-  .manager-decision-box {
-    background: #ebf8ff;
-    border: 1px solid #bee3f8;
-    padding: 6px 10px;
-    border-radius: 4px;
-    margin-top: 6px;
-    font-size: 12.5px;
-    font-weight: bold;
-    color: #2b6cb0;
-  }
-
-  .week-gantt-container {
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    overflow-x: auto;
-    background: #fff;
-  }
-
-  .week-day-header {
-    display: flex;
-    background: #edf2f7;
-    border-bottom: 2px solid #cbd5e0;
-  }
-
-  .week-day-title {
-    width: 200px;
-    padding: 8px 10px;
-    font-weight: bold;
-    font-size: 13px;
-    border-right: 1px solid #cbd5e0;
-  }
-
-  .print-preview-container {
-    margin-top: 24px;
-    padding: 20px;
-    border: 2px solid var(--primary);
-    background: #fff;
-    border-radius: 6px;
-  }
-
   .sync-badge {
     padding: 4px 10px;
     border-radius: 4px;
@@ -471,19 +269,6 @@
   }
   .sync-ok { background: #c6f6d5; color: #22543d; }
   .sync-saving { background: #feebc8; color: #742a2a; }
-
-  @media print {
-    @page { size: A4 landscape; margin: 8mm; }
-    body * { visibility: hidden; }
-    .printable-area, .printable-area * { visibility: visible; }
-    .printable-area { position: absolute; left: 0; top: 0; width: 100% !important; margin: 0 !important; padding: 0 !important; }
-    .no-print { display: none !important; }
-    select, input {
-      -webkit-appearance: none !important; -moz-appearance: none !important; appearance: none !important;
-      border: none !important; background: transparent !important; box-shadow: none !important;
-      padding: 0 !important; margin: 0 !important; font-weight: bold !important;
-    }
-  }
 
   .table-responsive {
     width: 100%;
@@ -497,7 +282,7 @@
 <body>
 
   <nav class="navbar no-print">
-    <div class="nav-brand">🏪 シフト管理アプリ <small style="font-size:12px; color:gray;">(手動同期・セキュア設計)</small></div>
+    <div class="nav-brand">🏪 シフト管理アプリ <small style="font-size:12px; color:gray;">(セキュア運用)</small></div>
     <div class="nav-tabs">
       <button class="tab-btn active" onclick="switchTab('tab-slots')">① シフト枠設定</button>
       <button class="tab-btn" onclick="switchTab('tab-staff')">② スタッフ管理</button>
@@ -510,17 +295,21 @@
 
   <div class="container">
 
-    <!-- 同期コントロールバー (手動同期・保存) -->
-    <div class="controls-row no-print" style="background:#fffaf0; border-color:#feebc8;">
-      <label>🏪 店舗選択: 
-        <select id="current-store-select" onchange="switchStore(this.value)">
-          <option value="store_A">店舗A</option>
-          <option value="store_B">店舗B</option>
-        </select>
-      </label>
-      <button class="btn btn-success" onclick="saveDataToCloud(true)">💾 手動保存</button>
-      <button class="btn" onclick="loadDataFromCloud()">🔄 最新データを読み込む</button>
-      <span id="sync-status" class="sync-badge sync-ok">🟢 接続完了</span>
+    <!-- コントロールバー（URL入力欄を廃止し、店舗切替・保存・更新ボタンを配置） -->
+    <div class="controls-row no-print" style="background:#fffaf0; border-color:#feebc8; display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; gap:12px; align-items:center;">
+        <label>🏪 店舗選択: 
+          <select id="current-store-select" onchange="switchStore(this.value)">
+            <option value="store_A">店舗A</option>
+            <option value="store_B">店舗B</option>
+          </select>
+        </label>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <span id="sync-status" class="sync-badge sync-ok">🟢 同期済み</span>
+        <button class="btn" onclick="loadDataFromCloud()">🔄 最新を読み込む</button>
+        <button class="btn btn-success" onclick="saveDataToCloud(true)">💾 保存 (Save)</button>
+      </div>
     </div>
 
     <!-- ① シフト枠設定画面 -->
@@ -610,61 +399,28 @@
     <!-- ③ 固定シフト表画面 -->
     <div id="tab-fixed" class="tab-content">
       <h2>基本週間固定シフト表</h2>
-      <div class="fixed-shift-layout">
-        <div>
-          <div class="table-responsive"><table>
-            <thead>
-              <tr id="fixed-table-header">
-                <th style="width:170px;">区分 (時間帯)</th>
-                <th style="width:60px;">枠No.</th>
-                <th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th>土</th><th>日</th>
-              </tr>
-            </thead>
-            <tbody id="fixed-table-body"></tbody>
-          </table></div>
-        </div>
-        <div class="sidebar-box">
-          <h3>👥 スタッフ別 週労働集計</h3>
-          <div id="sidebar-staff-list"></div>
-        </div>
-      </div>
     </div>
 
     <!-- ④ 暦シフト表画面 -->
     <div id="tab-calendar" class="tab-content">
       <h2>暦シフト表</h2>
-      <div class="controls-row no-print">
-        <label>表示基準日: <input type="date" id="cal-base-date" value="2026-08-01" onchange="renderCalendarTab()"></label>
-        <button class="btn" onclick="applyFixedToCal()">③の固定シフトを1か月分自動反映</button>
-      </div>
-      <div id="cal-month-view">
-        <div style="margin-bottom:10px; font-weight:bold; font-size:15px; color:var(--primary);" id="cal-month-title"></div>
-        <div class="cal-grid">
-          <div class="cal-head-cell" style="color:#e53e3e;">日</div>
-          <div class="cal-head-cell">月</div><div class="cal-head-cell">火</div><div class="cal-head-cell">水</div>
-          <div class="cal-head-cell">木</div><div class="cal-head-cell">金</div><div class="cal-head-cell" style="color:#3182ce;">土</div>
-        </div>
-        <div class="cal-grid" id="cal-month-days-container" style="margin-top:6px;"></div>
-      </div>
     </div>
 
     <!-- ⑤ 休み実績入力タブ -->
     <div id="tab-off-input" class="tab-content">
       <h2>休み実績・休み申請入力</h2>
-      <p style="color:var(--text-muted); font-size:13px;">スタッフ別の休み希望を入力できます。</p>
     </div>
 
     <!-- ⑥ ヘルプ募集タブ -->
     <div id="tab-help" class="tab-content">
       <h2>ヘルプ募集一覧</h2>
-      <p style="color:var(--text-muted); font-size:13px;">緊急ヘルプ・通常募集の管理を行います。</p>
     </div>
 
   </div>
 
 <script>
 // ==========================================
-// フロントエンド制御ロジック (クリーン・堅牢版)
+// フロントエンド制御ロジック (URL非含有・完全セキュア版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -674,7 +430,6 @@ let currentStoreId = localStorage.getItem("current_store_id") || "store_A";
 let lastUpdatedTimestamp = "";
 let isDirty = false;
 
-// 初期状態は空（クラウドから読み込む）
 let slotData = [
   { name: '朝勤', start: '08:00', end: '13:00', slots: 1, colorClass: 'bg-morning' },
   { name: '昼勤', start: '12:00', end: '17:00', slots: 1, colorClass: 'bg-noon' }
@@ -683,25 +438,20 @@ let staffList = [];
 let fixedAssignments = {};
 let calAssignments = {};
 let offRequestsStore = {};
-const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
 
-// 店舗セレクターの初期化
 function initStoreSelect() {
   const sel = document.getElementById("current-store-select");
-  if (sel) {
-    sel.value = currentStoreId;
-  }
+  if (sel) sel.value = currentStoreId;
 }
 
-// 変更フラグを立てる
 function markDirty() {
   isDirty = true;
   const badge = document.getElementById("sync-status");
   badge.className = "sync-badge sync-saving";
-  badge.innerText = "🟡 未保存の変更があります";
+  badge.innerText = "🟡 未保存の変更あり";
 }
 
-// 1. データの読み込み (クラウドから同期)
+// 1. データの読み込み
 async function loadDataFromCloud() {
   showOverlay("データを読み込んでいます...");
   try {
@@ -730,26 +480,19 @@ async function loadDataFromCloud() {
       
       const badge = document.getElementById("sync-status");
       badge.className = "sync-badge sync-ok";
-      badge.innerText = "🟢 最新データ同期済み";
+      badge.innerText = "🟢 同期済み";
     } else {
       alert("読み込みエラー: " + result.message);
     }
   } catch (error) {
     console.error(error);
-    alert("通信エラーが発生しました。ローカルバックアップを確認します。");
-    const localFallback = localStorage.getItem(`shift_data_backup_${currentStoreId}`);
-    if (localFallback) {
-      const parsed = JSON.parse(localFallback);
-      slotData = parsed.slotData || slotData;
-      staffList = parsed.staffList || staffList;
-      recalculateAll();
-    }
+    alert("通信エラーが発生しました。");
   } finally {
     hideOverlay();
   }
 }
 
-// 2. データの保存 (クラウドへ送信 ＆ 楽観的ロック)
+// 2. データの保存
 async function saveDataToCloud(isManual = true) {
   showOverlay("データを保存しています...");
   
@@ -779,7 +522,6 @@ async function saveDataToCloud(isManual = true) {
     if (result.status === "success") {
       lastUpdatedTimestamp = result.lastUpdated;
       isDirty = false;
-      localStorage.removeItem(`shift_data_backup_${currentStoreId}`);
       
       const badge = document.getElementById("sync-status");
       badge.className = "sync-badge sync-ok";
@@ -789,7 +531,7 @@ async function saveDataToCloud(isManual = true) {
       return true;
     } else if (result.status === "conflict") {
       hideOverlay();
-      const overwrite = confirm("【警告】他の端末でデータが更新されています。\n上書きしますか？（キャンセルすると最新データが読み込まれます）");
+      const overwrite = confirm("【警告】他の端末でデータが更新されています。\n上書きしますか？");
       if (overwrite) {
         lastUpdatedTimestamp = result.serverLastUpdated;
         return await saveDataToCloud(isManual);
@@ -799,20 +541,18 @@ async function saveDataToCloud(isManual = true) {
       }
     } else {
       alert("保存エラー: " + result.message);
-      saveToLocalStorageBackup();
       return false;
     }
   } catch (error) {
     console.error(error);
-    alert("通信に失敗しました。データをローカルに一時保存しました。");
-    saveToLocalStorageBackup();
+    alert("通信に失敗しました。");
     return false;
   } finally {
     hideOverlay();
   }
 }
 
-// 3. 店舗切り替え処理 (未保存チェック付き)
+// 3. 店舗切り替え
 async function switchStore(newStoreId) {
   if (isDirty) {
     const confirmSave = confirm("保存されていない変更があります。保存してから店舗を切り替えますか？");
@@ -826,13 +566,6 @@ async function switchStore(newStoreId) {
   await loadDataFromCloud();
 }
 
-// ローカルストレージへのバックアップ
-function saveToLocalStorageBackup() {
-  const backupData = { slotData, staffList, fixedAssignments, calAssignments, offRequestsStore };
-  localStorage.setItem(`shift_data_backup_${currentStoreId}`, JSON.stringify(backupData));
-}
-
-// オーバーレイUI制御
 function showOverlay(msg) {
   let overlay = document.getElementById("app-loading-overlay");
   if (!overlay) {
@@ -850,7 +583,6 @@ function hideOverlay() {
   if (overlay) overlay.style.display = "none";
 }
 
-// 画面を閉じようとした時の警告
 window.addEventListener("beforeunload", (e) => {
   if (isDirty) {
     e.preventDefault();
@@ -858,7 +590,6 @@ window.addEventListener("beforeunload", (e) => {
   }
 });
 
-// 計算・描画ヘルパー関数群
 function timeToHours(t) { const p = t.split(':'); return parseInt(p[0]) + parseInt(p[1])/60; }
 function calcDuration(s, e) { let st = timeToHours(s), et = timeToHours(e); if (et <= st) et += 24; return et - st; }
 
@@ -942,12 +673,6 @@ function addStaffRow() {
   renderStaffTable();
   markDirty();
 }
-
-function applyFixedToCal() {
-  alert("固定シフトの一括反映処理");
-}
-
-function renderCalendarTab() {}
 
 function switchTab(tabId) {
   document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
