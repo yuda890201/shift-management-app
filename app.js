@@ -181,8 +181,45 @@ function autoSave() {
   if (!isLoadedFromSheets) return;
   clearTimeout(autoSaveTimer);
 
+  // 変更があったことをマークしておく（必要に応じてフラグ管理など）
   autoSaveTimer = setTimeout(() => {
-    showLoading("変更をクラウドに保存中...");
+    // 変更から少し時間が経ったらバックグラウンドでサイレント保存
+    silentSaveToSheets();
+  }, 1000);
+}
+// 画面を覆わずに裏でこっそり保存する関数
+function silentSaveToSheets() {
+  if (!isLoadedFromSheets) return;
+  let mw = document.getElementById('min-wage');
+  let nr = document.getElementById('night-rate');
+
+  let payload = {
+    slotData: slotData,
+    staffList: staffList,
+    fixedAssignments: fixedAssignments,
+    calAssignments: calAssignments,
+    offRequestsStore: offRequestsStore,
+    config: {
+      minWage: mw ? parseFloat(mw.value) : 1057,
+      nightRate: nr ? parseFloat(nr.value) : 1.25,
+      storeName: currentStore
+    }
+  };
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(err => {
+    console.error("バックグラウンド保存エラー:", err);
+  });
+}
+// 画面遷移（タブ切り替え）時に確実にオーバーレイを出して保存する関数
+function saveAllNow() {
+  return new Promise((resolve) => {
+    clearTimeout(autoSaveTimer);
+    showLoading("データを保存しています...");
 
     let mw = document.getElementById('min-wage');
     let nr = document.getElementById('night-rate');
@@ -206,14 +243,39 @@ function autoSave() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     }).then(() => {
-      hideLoading();
+      setTimeout(() => {
+        hideLoading();
+        resolve();
+      }, 400); // 演出用のわずかなウェイト
     }).catch(err => {
       hideLoading();
       console.error("保存エラー:", err);
+      resolve();
     });
-  }, 800);
+  });
 }
+// ==========================================
+// 画面遷移（タブ切り替え）ロジック
+// ==========================================
+async function switchTab(tabId) {
+  // 1. タブを移動する前に、現在のデータを確実にクラウドへ保存してオーバーレイを表示
+  await saveAllNow();
 
+  // 2. タブボタンとコンテンツの切り替え
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  
+  let targetTab = document.getElementById(tabId);
+  if (targetTab) targetTab.classList.add('active');
+  if (event && event.currentTarget) event.currentTarget.classList.add('active');
+
+  // 3. 移動先のタブに応じて最新データを再描画
+  if (tabId === 'tab-calendar') {
+    renderCalendarTab();
+  } else if (tabId === 'tab-fixed') {
+    renderFixedShiftTable();
+  }
+}
 // ==========================================
 // 各種画面描画ロジック
 // ==========================================
