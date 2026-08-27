@@ -1,8 +1,7 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 完全自動同期版)
+// フロントエンド制御ロジック (app.js - オーバーレイ＆完全同期版)
 // ==========================================
 
-// ★ここにデプロイした最新のGASのWeb Web App URLを直接埋め込みます
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
 
 let storeList = ['清川二丁目店', '博多住吉通り店'];
@@ -28,6 +27,44 @@ let calAssignments = {};
 let offRequestsStore = {};
 const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
 
+// ==========================================
+// ローディング・オーバーレイ制御
+// ==========================================
+function showLoading(message = "処理中...") {
+  let overlay = document.getElementById('loading-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'loading-overlay';
+    overlay.innerHTML = `
+      <div style="background:white; padding:24px 32px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.15); display:flex; align-items:center; gap:16px;">
+        <div class="spinner" style="width:24px; height:24px; border:3px solid #cbd5e0; border-top-color:#2b6cb0; border-radius:50%; animation: spin 0.8s linear infinite;"></div>
+        <span id="loading-text" style="font-weight:bold; font-size:14px; color:#2d3748;">${message}</span>
+      </div>
+    `;
+    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); display:flex; justify-content:center; align-items:center; z-index:9999;";
+    
+    // スピナー用のアニメーション定義
+    if (!document.getElementById('spinner-style')) {
+      let style = document.createElement('style');
+      style.id = 'spinner-style';
+      style.innerHTML = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
+      document.head.appendChild(style);
+    }
+    document.body.appendChild(overlay);
+  } else {
+    document.getElementById('loading-text').innerText = message;
+    overlay.style.display = 'flex';
+  }
+}
+
+function hideLoading() {
+  let overlay = document.getElementById('loading-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+// ==========================================
+// 時間・日付計算ユーティリティ
+// ==========================================
 function timeToHours(timeStr) {
   const parts = timeStr.split(':');
   return parseInt(parts[0]) + parseInt(parts[1]) / 60;
@@ -40,6 +77,51 @@ function calcDuration(startStr, endStr) {
   return e - s;
 }
 
+// 日本の祝日算出
+function getHolidayName(dateObj) {
+  let y = dateObj.getFullYear();
+  let m = dateObj.getMonth() + 1;
+  let d = dateObj.getDate();
+  let dayOfWeek = dateObj.getDay();
+
+  if (m === 1 && d === 1) return "元日";
+  if (m === 2 && d === 11) return "建国記念の日";
+  if (m === 2 && d === 23) return "天皇誕生日";
+  if (m === 4 && d === 29) return "昭和の日";
+  if (m === 5 && d === 3) return "憲法記念日";
+  if (m === 5 && d === 4) return "みどりの日";
+  if (m === 5 && d === 5) return "こどもの日";
+  if (m === 8 && d === 11) return "山の日";
+  if (m === 11 && d === 3) return "文化の日";
+  if (m === 11 && d === 23) return "勤労感謝の日";
+
+  let nthMonday = (targetNth) => {
+    let firstDayDow = new Date(y, m - 1, 1).getDay();
+    let offset = (1 - firstDayDow + 7) % 7;
+    return 1 + offset + (targetNth - 1) * 7;
+  };
+
+  if (m === 1 && d === nthMonday(2)) return "成人の日";
+  if (m === 7 && d === nthMonday(3)) return "海の日";
+  if (m === 9 && d === nthMonday(3)) return "敬老の日";
+  if (m === 10 && d === nthMonday(2)) return "スポーツの日";
+
+  let shunbunDay = Math.floor(20.8431 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+  let shubunDay = Math.floor(23.2488 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+  if (m === 3 && d === shunbunDay) return "春分の日";
+  if (m === 9 && d === shubunDay) return "秋分の日";
+
+  if (dayOfWeek === 1) {
+    let yesterday = new Date(y, m - 1, d - 1);
+    let yName = getHolidayName(yesterday);
+    if (yName && yName !== "振替休日") return "振替休日";
+  }
+  return "";
+}
+
+// ==========================================
+// 店舗切り替え
+// ==========================================
 function renderStoreSelect() {
   let sel = document.getElementById('store-select');
   if (!sel) return;
@@ -60,18 +142,15 @@ function switchStore(storeName) {
 }
 
 // ==========================================
-// 自動クラウド読み込み
+// クラウド読み込み (Load)
 // ==========================================
 function loadAllFromSheets() {
-  let statusBadge = document.getElementById('sync-status');
-  if (statusBadge) {
-    statusBadge.className = 'sync-badge sync-saving';
-    statusBadge.innerText = '🔄 読み込み中...';
-  }
+  showLoading("クラウドからデータを読み込んでいます...");
 
   fetch(`${GAS_URL}?store=${encodeURIComponent(currentStore)}`)
     .then(res => res.json())
     .then(data => {
+      hideLoading();
       if (data.status === "success") {
         if (data.storeList && data.storeList.length > 0) {
           storeList = data.storeList;
@@ -82,6 +161,7 @@ function loadAllFromSheets() {
         if (data.fixedAssignments) fixedAssignments = data.fixedAssignments;
         if (data.calAssignments) calAssignments = data.calAssignments;
         if (data.offRequestsStore) offRequestsStore = data.offRequestsStore;
+        
         if (data.config) {
           let mw = document.getElementById('min-wage');
           let nr = document.getElementById('night-rate');
@@ -92,38 +172,27 @@ function loadAllFromSheets() {
         isLoadedFromSheets = true;
         recalculateAll();
         renderStaffTable();
-
-        if (statusBadge) {
-          statusBadge.className = 'sync-badge sync-ok';
-          statusBadge.innerText = '🟢 自動同期中';
-        }
+        renderFixedShiftTable();
       } else {
-        throw new Error(data.message || "取得失敗");
+        console.error("データ取得エラー:", data.message);
       }
     })
     .catch(err => {
-      console.error(err);
-      if (statusBadge) {
-        statusBadge.className = 'sync-badge sync-saving';
-        statusBadge.innerText = '⚠️ 同期オフライン';
-      }
+      hideLoading();
+      console.error("通信エラー:", err);
     });
 }
 
 // ==========================================
-// 自動クラウド保存 (デバウンス付き)
+// クラウド保存 (Save with Debounce)
 // ==========================================
 function autoSave() {
   if (!isLoadedFromSheets) return;
   clearTimeout(autoSaveTimer);
-  
-  let statusBadge = document.getElementById('sync-status');
-  if (statusBadge) {
-    statusBadge.className = 'sync-badge sync-saving';
-    statusBadge.innerText = '💾 保存中...';
-  }
 
   autoSaveTimer = setTimeout(() => {
+    showLoading("変更をクラウドに保存中...");
+
     let mw = document.getElementById('min-wage');
     let nr = document.getElementById('night-rate');
 
@@ -146,22 +215,16 @@ function autoSave() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     }).then(() => {
-      if (statusBadge) {
-        statusBadge.className = 'sync-badge sync-ok';
-        statusBadge.innerText = '🟢 自動同期中';
-      }
+      hideLoading();
     }).catch(err => {
-      console.error(err);
-      if (statusBadge) {
-        statusBadge.className = 'sync-badge sync-saving';
-        statusBadge.innerText = '⚠️ 保存エラー';
-      }
+      hideLoading();
+      console.error("保存エラー:", err);
     });
-  }, 1000);
+  }, 800);
 }
 
 // ==========================================
-// 計算・画面描画ロジック
+// 各種画面描画ロジック
 // ==========================================
 function recalculateAll() {
   const minWage = parseFloat(document.getElementById('min-wage')?.value) || 1057;
@@ -199,14 +262,17 @@ function recalculateAll() {
     tbody.appendChild(tr);
   });
 
-  document.getElementById('kpi-daily-cost').innerText = '¥' + Math.round(totalDailyCost).toLocaleString();
-  document.getElementById('kpi-daily-hours').innerText = '総稼働時間: ' + totalDailyHours.toFixed(1) + ' 時間 / 日';
-  document.getElementById('kpi-monthly-cost').innerText = '¥' + Math.round(totalDailyCost * 30).toLocaleString();
-  document.getElementById('kpi-total-slots').innerText = totalSlotsCount + ' 枠 / 日';
+  let dc = document.getElementById('kpi-daily-cost');
+  let dh = document.getElementById('kpi-daily-hours');
+  let mc = document.getElementById('kpi-monthly-cost');
+  let ts = document.getElementById('kpi-total-slots');
+
+  if (dc) dc.innerText = '¥' + Math.round(totalDailyCost).toLocaleString();
+  if (dh) dh.innerText = '総稼働時間: ' + totalDailyHours.toFixed(1) + ' 時間 / 日';
+  if (mc) mc.innerText = '¥' + Math.round(totalDailyCost * 30).toLocaleString();
+  if (ts) ts.innerText = totalSlotsCount + ' 枠 / 日';
 
   renderGanttChart();
-  renderFixedShiftTable();
-  renderCalendarTab();
 }
 
 function updateData(index, field, value) {
@@ -235,11 +301,9 @@ function renderStaffTable() {
   let tbody = document.getElementById('staff-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
-
   staffList.forEach((s, idx) => {
     let tr = document.createElement('tr');
-
-    // ① 希望曜日のチェックボックス群を生成
+    
     let dowHtml = '<div class="dow-group">';
     DOW_OPTIONS.forEach(d => {
       let checked = (s.days && s.days.includes(d)) ? 'checked' : '';
@@ -247,7 +311,6 @@ function renderStaffTable() {
     });
     dowHtml += '</div>';
 
-    // ② 希望時間帯のセレクトボックスを生成
     let timeHtml = `<select class="editable-input" onchange="staffList[${idx}].time = this.value; renderStaffTable(); autoSave();">`;
     let timeOptions = ['全時間帯', ...slotData.map(x => x.name)];
     timeOptions.forEach(tOpt => {
@@ -268,7 +331,6 @@ function renderStaffTable() {
   });
 }
 
-// 曜日のチェックが切り替わったときに配列を更新するヘルパー関数
 function toggleStaffDow(idx, day) {
   if (!staffList[idx].days) staffList[idx].days = [];
   let arr = staffList[idx].days;
@@ -281,22 +343,18 @@ function toggleStaffDow(idx, day) {
 }
 
 function addStaffRow() {
-  staffList.push({ id: String(staffList.length + 1), name: '新規スタッフ', days: [], time: '全時間帯', note: '' });
+  staffList.push({ id: String(staffList.length + 1), name: '新規スタッフ', days: ['月','火','水','木','金'], time: '全時間帯', note: '' });
   renderStaffTable();
   autoSave();
 }
 
-// ==========================================
-// ③ 固定シフト表 ＆ サイドバー集計ロジック
-// ==========================================
-
+// --- ③ 固定シフト表 ---
 function renderFixedShiftTable() {
   let tbody = document.getElementById('fixed-table-body');
   if (!tbody) return;
   tbody.innerHTML = '';
 
   let rowCounter = 0;
-
   slotData.forEach((item) => {
     for (let i = 1; i <= item.slots; i++) {
       rowCounter++;
@@ -321,14 +379,13 @@ function renderFixedShiftTable() {
 
         html += `<td>${staffOptHtml}</td>`;
       }
-
       tr.innerHTML = html;
       tbody.appendChild(tr);
     }
   });
-
   updateSidebarStats();
 }
+
 function updateAssignment(key, nameVal) {
   fixedAssignments[key] = nameVal;
   renderFixedShiftTable();
@@ -376,24 +433,8 @@ function updateSidebarStats() {
     sidebarContainer.appendChild(card);
   });
 }
-function renderCalendarTab() {}
-function renderOffInputTab() {}
-function renderHelpTab() {}
-function applyFixedToCal() {}
-function promptAddNewStore() {}
-function promptRenameStore() {}
-function triggerPrint() { window.print(); }
 
-function switchTab(tabId) {
-  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  document.getElementById(tabId).classList.add('active');
-  event.currentTarget.classList.add('active');
-}
-　　　　// ==========================================
-// ④ 暦シフト表（カレンダー表示 ＆ 自動反映）ロジック
-// ==========================================
-
+// --- ④ 暦シフト表 ---
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
   if (!picker) return;
@@ -416,9 +457,7 @@ function initCalendarTabControls() {
 function onMonthPickerChange() {
   let ym = document.getElementById('cal-month-picker').value;
   let baseInput = document.getElementById('cal-base-date');
-  if (baseInput) {
-    baseInput.value = ym + '-01';
-  }
+  if (baseInput) baseInput.value = ym + '-01';
   renderCalendarTab();
   autoSave();
 }
@@ -453,14 +492,12 @@ function renderMonthCalendar(baseDate) {
   let lastDay = new Date(year, month + 1, 0);
   let startDow = firstDay.getDay();
 
-  // 月の初日までの空白セル
   for (let i = 0; i < startDow; i++) {
     let cell = document.createElement('div');
     cell.className = 'cal-day-cell other-month';
     container.appendChild(cell);
   }
 
-  // 1日から月末まで
   for (let day = 1; day <= lastDay.getDate(); day++) {
     let curDate = new Date(year, month, day);
     let yyyy = curDate.getFullYear();
@@ -476,8 +513,6 @@ function renderMonthCalendar(baseDate) {
     else if (dowNum === 6) dateNumStyle = 'color:#3182ce;';
 
     let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag">${holidayName}</span>` : '';
-    
-    let dayHasChange = false;
     let shiftsHtml = '';
     let rowIdx = 0;
 
@@ -488,11 +523,6 @@ function renderMonthCalendar(baseDate) {
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
         let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
 
-        let isItemChanged = (calAssignments[key] !== undefined && calAssignments[key] !== defaultVal);
-        if (isItemChanged) { dayHasChange = true; }
-
-        let itemClass = isItemChanged ? 'cal-shift-item is-modified' : 'cal-shift-item';
-
         let staffOptHtml = `<select class="editable-input" style="font-size:10px; padding:1px 2px;" onchange="updateCalAssignment('${key}', this.value);">`;
         staffOptHtml += '<option value="">--未設定--</option>';
         staffList.forEach(st => {
@@ -501,22 +531,13 @@ function renderMonthCalendar(baseDate) {
         });
         staffOptHtml += '</select>';
 
-        shiftsHtml += `<div class="${itemClass}"><strong>${item.name}${sIdx > 1 ? sIdx : ''}</strong>: ${staffOptHtml}</div>`;
+        shiftsHtml += `<div class="cal-shift-item"><strong>${item.name}${sIdx > 1 ? sIdx : ''}</strong>: ${staffOptHtml}</div>`;
       }
     });
 
     let cell = document.createElement('div');
-    cell.className = dayHasChange ? 'cal-day-cell has-changed' : 'cal-day-cell';
-    let changeTagHtml = dayHasChange ? `<span class="cal-changed-tag">変更あり</span>` : '';
-
-    let headerHtml = `
-      <div class="cal-day-header">
-        <span class="cal-date-num" style="${dateNumStyle}">${day} ${changeTagHtml}</span>
-        ${holidayTagHtml}
-      </div>
-    `;
-
-    cell.innerHTML = headerHtml + shiftsHtml;
+    cell.className = 'cal-day-cell';
+    cell.innerHTML = `<div class="cal-day-header"><span class="cal-date-num" style="${dateNumStyle}">${day}</span>${holidayTagHtml}</div>` + shiftsHtml;
     container.appendChild(cell);
   }
 }
@@ -554,8 +575,33 @@ function applyFixedToCal() {
     alert('固定シフトの一括反映が完了しました。');
   }
 }
+
+// --- 画面遷移（タブ切り替え）時の同期連動 ---
+function switchTab(tabId) {
+  // タブボタンとコンテンツの切り替え
+  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  
+  let targetTab = document.getElementById(tabId);
+  if (targetTab) targetTab.classList.add('active');
+  if (event && event.currentTarget) event.currentTarget.classList.add('active');
+
+  // タブが切り替わったタイミングで、暦シフト表などの最新データを再描画
+  if (tabId === 'tab-calendar') {
+    renderCalendarTab();
+  } else if (tabId === 'tab-fixed') {
+    renderFixedShiftTable();
+  }
+}
+
+function renderOffInputTab() {}
+function renderHelpTab() {}
+function promptAddNewStore() {}
+function promptRenameStore() {}
+function triggerPrint() { window.print(); }
+
 // ==========================================
-// 初期化実行
+// 初期化実行 (初回ロード)
 // ==========================================
 renderStoreSelect();
 loadAllFromSheets();
