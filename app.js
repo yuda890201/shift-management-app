@@ -166,6 +166,7 @@ function loadAllFromSheets() {
         recalculateAll();
         renderStaffTable();
         renderFixedShiftTable();
+        renderOffInputTab(); // ★ここでデータ読み込み完了時に休み入力リストも更新
       } else {
         console.error("データ取得エラー:", data.message);
       }
@@ -765,3 +766,10 @@ function triggerPrint() { window.print(); }
 // ==========================================
 renderStoreSelect();
 loadAllFromSheets();
+
+// 初回ロード時に各タブの初期描画も確実に行う
+window.addEventListener('DOMContentLoaded', () => {
+  renderStaffTable();
+  renderFixedShiftTable();
+  renderOffInputTab();
+});
