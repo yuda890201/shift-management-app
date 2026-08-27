@@ -279,12 +279,13 @@ async function switchTab(tabId) {
   if (targetTab) targetTab.classList.add('active');
   if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
+  // タブごとの再描画
   if (tabId === 'tab-calendar') {
     renderCalendarTab();
   } else if (tabId === 'tab-fixed') {
     renderFixedShiftTable();
   } else if (tabId === 'tab-off-input') {
-    renderOffInputTab(); // ★ここで確実にリストを更新
+    renderOffInputTab(); // ★ここを追加！
   }
 }
 
