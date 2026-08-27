@@ -658,7 +658,97 @@ function switchTab(tabId) {
   }
 }
 
-function renderOffInputTab() {}
+// ==========================================
+// ⑤ 休み実績・希望休入力ロジック
+// ==========================================
+
+function renderOffInputTab() {
+  let selectEl = document.getElementById('off-staff-select');
+  if (!selectEl) return;
+  
+  let currentSelected = selectEl.value;
+  selectEl.innerHTML = '';
+  
+  staffList.forEach(s => {
+    let opt = document.createElement('option');
+    opt.value = s.name;
+    opt.innerText = s.name;
+    if (s.name === currentSelected) opt.selected = true;
+    selectEl.appendChild(opt);
+  });
+
+  renderOffTable();
+}
+
+function addOffRequest() {
+  let staffSelect = document.getElementById('off-staff-select');
+  let dateInput = document.getElementById('off-date-input');
+  let typeSelect = document.getElementById('off-type-select');
+
+  if (!staffSelect || !dateInput || !typeSelect) return;
+
+  let staffName = staffSelect.value;
+  let dateStr = dateInput.value;
+  let offType = typeSelect.value; // 例: "希望公休", "有給", "欠勤" など
+
+  if (!staffName) {
+    alert('スタッフを選択してください。');
+    return;
+  }
+  if (!dateStr) {
+    alert('日付を選択してください。');
+    return;
+  }
+
+  // offRequestsStore構造: { "2026-08-15": { "下城": "希望公休" }, ... }
+  if (!offRequestsStore[dateStr]) {
+    offRequestsStore[dateStr] = {};
+  }
+  offRequestsStore[dateStr][staffName] = offType;
+
+  renderOffTable();
+  autoSave(); // サイレント保存 or 画面遷移でセーブ
+}
+
+function removeOffRequest(dateStr, staffName) {
+  if (offRequestsStore[dateStr]) {
+    delete offRequestsStore[dateStr][staffName];
+    if (Object.keys(offRequestsStore[dateStr]).length === 0) {
+      delete offRequestsStore[dateStr];
+    }
+  }
+  renderOffTable();
+  autoSave();
+}
+
+function renderOffTable() {
+  let tbody = document.getElementById('off-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  // 登録されている休み希望を日付順にソートして一覧表示
+  let dates = Object.keys(offRequestsStore).sort();
+
+  if (dates.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">登録されている休み希望・実績はありません。</td></tr>`;
+    return;
+  }
+
+  dates.forEach(dateStr => {
+    let staffMap = offRequestsStore[dateStr];
+    for (let staffName in staffMap) {
+      let offType = staffMap[staffName];
+      let tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${dateStr}</td>
+        <td><strong>${staffName}</strong></td>
+        <td><span class="badge" style="background:#ebf8ff; color:#2b6cb0; padding:2px 6px; border-radius:3px; font-weight:bold;">${offType}</span></td>
+        <td><button class="btn btn-danger" style="padding:2px 8px; font-size:11px;" onclick="removeOffRequest('${dateStr}', '${staffName}')">削除</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+  });
+}
 function renderHelpTab() {}
 function promptAddNewStore() {}
 function promptRenameStore() {}
