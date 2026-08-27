@@ -269,10 +269,8 @@ function saveAllNow() {
 // 画面遷移（タブ切り替え）ロジック
 // ==========================================
 async function switchTab(tabId) {
-  // 1. タブを移動する前に、現在のデータを確実にクラウドへ保存してオーバーレイを表示
   await saveAllNow();
 
-  // 2. タブボタンとコンテンツの切り替え
   document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   
@@ -280,13 +278,16 @@ async function switchTab(tabId) {
   if (targetTab) targetTab.classList.add('active');
   if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
-  // 3. 移動先のタブに応じて最新データを再描画
+  // タブごとの再描画
   if (tabId === 'tab-calendar') {
     renderCalendarTab();
   } else if (tabId === 'tab-fixed') {
     renderFixedShiftTable();
+  } else if (tabId === 'tab-off-input') { // ★追加
+    renderOffInputTab();
   }
 }
+
 // ==========================================
 // 各種画面描画ロジック
 // ==========================================
@@ -659,7 +660,7 @@ function switchTab(tabId) {
 }
 
 // ==========================================
-// ⑤ 休み実績・希望休入力ロジック
+// ⑤ 休み実績・希望休入力ロジック（シンプル版）
 // ==========================================
 
 function renderOffInputTab() {
@@ -669,6 +670,7 @@ function renderOffInputTab() {
   let currentSelected = selectEl.value;
   selectEl.innerHTML = '';
   
+  // スタッフ一覧をプルダウンにセット
   staffList.forEach(s => {
     let opt = document.createElement('option');
     opt.value = s.name;
@@ -683,13 +685,11 @@ function renderOffInputTab() {
 function addOffRequest() {
   let staffSelect = document.getElementById('off-staff-select');
   let dateInput = document.getElementById('off-date-input');
-  let typeSelect = document.getElementById('off-type-select');
 
-  if (!staffSelect || !dateInput || !typeSelect) return;
+  if (!staffSelect || !dateInput) return;
 
   let staffName = staffSelect.value;
   let dateStr = dateInput.value;
-  let offType = typeSelect.value; // 例: "希望公休", "有給", "欠勤" など
 
   if (!staffName) {
     alert('スタッフを選択してください。');
@@ -700,14 +700,14 @@ function addOffRequest() {
     return;
   }
 
-  // offRequestsStore構造: { "2026-08-15": { "下城": "希望公休" }, ... }
+  // offRequestsStore構造: { "2026-08-15": { "下城": true }, ... }
   if (!offRequestsStore[dateStr]) {
     offRequestsStore[dateStr] = {};
   }
-  offRequestsStore[dateStr][staffName] = offType;
+  offRequestsStore[dateStr][staffName] = true; // シンプルに休み希望フラグを立てる
 
   renderOffTable();
-  autoSave(); // サイレント保存 or 画面遷移でセーブ
+  autoSave();
 }
 
 function removeOffRequest(dateStr, staffName) {
@@ -726,23 +726,20 @@ function renderOffTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  // 登録されている休み希望を日付順にソートして一覧表示
   let dates = Object.keys(offRequestsStore).sort();
 
   if (dates.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:16px;">登録されている休み希望・実績はありません。</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">登録されている休み希望はありません。</td></tr>`;
     return;
   }
 
   dates.forEach(dateStr => {
     let staffMap = offRequestsStore[dateStr];
     for (let staffName in staffMap) {
-      let offType = staffMap[staffName];
       let tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${dateStr}</td>
         <td><strong>${staffName}</strong></td>
-        <td><span class="badge" style="background:#ebf8ff; color:#2b6cb0; padding:2px 6px; border-radius:3px; font-weight:bold;">${offType}</span></td>
         <td><button class="btn btn-danger" style="padding:2px 8px; font-size:11px;" onclick="removeOffRequest('${dateStr}', '${staffName}')">削除</button></td>
       `;
       tbody.appendChild(tr);
