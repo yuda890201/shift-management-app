@@ -37,29 +37,20 @@ function showLoading(message = "処理中...") {
     overlay.id = 'loading-overlay';
     overlay.innerHTML = `
       <div style="background:white; padding:24px 32px; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.15); display:flex; align-items:center; gap:16px;">
-        <div class="spinner" style="width:24px; height:24px; border:3px solid #cbd5e0; border-top-color:#2b6cb0; border-radius:50%; animation: spin 0.8s linear infinite;"></div>
+        <div class="spinner"></div>
         <span id="loading-text" style="font-weight:bold; font-size:14px; color:#2d3748;">${message}</span>
       </div>
     `;
-    overlay.style.cssText = "position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); display:flex; justify-content:center; align-items:center; z-index:9999;";
-    
-    // スピナー用のアニメーション定義
-    if (!document.getElementById('spinner-style')) {
-      let style = document.createElement('style');
-      style.id = 'spinner-style';
-      style.innerHTML = `@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`;
-      document.head.appendChild(style);
-    }
     document.body.appendChild(overlay);
   } else {
     document.getElementById('loading-text').innerText = message;
-    overlay.style.display = 'flex';
   }
+  overlay.classList.add('active');
 }
 
 function hideLoading() {
   let overlay = document.getElementById('loading-overlay');
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) overlay.classList.remove('active');
 }
 
 // ==========================================
