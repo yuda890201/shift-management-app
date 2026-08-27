@@ -278,13 +278,12 @@ async function switchTab(tabId) {
   if (targetTab) targetTab.classList.add('active');
   if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
-  // タブごとの再描画
   if (tabId === 'tab-calendar') {
     renderCalendarTab();
   } else if (tabId === 'tab-fixed') {
     renderFixedShiftTable();
-  } else if (tabId === 'tab-off-input') { // ★追加
-    renderOffInputTab();
+  } else if (tabId === 'tab-off-input') {
+    renderOffInputTab(); // ★ここで確実にリストを更新
   }
 }
 
@@ -663,6 +662,10 @@ function switchTab(tabId) {
 // ⑤ 休み実績・希望休入力ロジック（シンプル版）
 // ==========================================
 
+// ==========================================
+// ⑤ 休み実績・希望休入力ロジック（シンプル完全版）
+// ==========================================
+
 function renderOffInputTab() {
   let selectEl = document.getElementById('off-staff-select');
   if (!selectEl) return;
@@ -670,7 +673,14 @@ function renderOffInputTab() {
   let currentSelected = selectEl.value;
   selectEl.innerHTML = '';
   
-  // スタッフ一覧をプルダウンにセット
+  if (!staffList || staffList.length === 0) {
+    let opt = document.createElement('option');
+    opt.value = "";
+    opt.innerText = "スタッフが登録されていません";
+    selectEl.appendChild(opt);
+    return;
+  }
+
   staffList.forEach(s => {
     let opt = document.createElement('option');
     opt.value = s.name;
@@ -700,11 +710,10 @@ function addOffRequest() {
     return;
   }
 
-  // offRequestsStore構造: { "2026-08-15": { "下城": true }, ... }
   if (!offRequestsStore[dateStr]) {
     offRequestsStore[dateStr] = {};
   }
-  offRequestsStore[dateStr][staffName] = true; // シンプルに休み希望フラグを立てる
+  offRequestsStore[dateStr][staffName] = true;
 
   renderOffTable();
   autoSave();
