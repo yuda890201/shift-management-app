@@ -390,7 +390,170 @@ function switchTab(tabId) {
   document.getElementById(tabId).classList.add('active');
   event.currentTarget.classList.add('active');
 }
+　　　　// ==========================================
+// ④ 暦シフト表（カレンダー表示 ＆ 自動反映）ロジック
+// ==========================================
 
+function initCalendarTabControls() {
+  let picker = document.getElementById('cal-month-picker');
+  if (!picker) return;
+  picker.innerHTML = '';
+
+  let baseInput = document.getElementById('cal-base-date');
+  let baseDate = new Date(baseInput ? baseInput.value : '2026-08-01');
+
+  for (let i = 0; i < 12; i++) {
+    let d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
+    let yyyy = d.getFullYear();
+    let mm = String(d.getMonth() + 1).padStart(2, '0');
+    let opt = document.createElement('option');
+    opt.value = `${yyyy}-${mm}`;
+    opt.innerText = `${yyyy}年 ${d.getMonth() + 1}月`;
+    picker.appendChild(opt);
+  }
+}
+
+function onMonthPickerChange() {
+  let ym = document.getElementById('cal-month-picker').value;
+  let baseInput = document.getElementById('cal-base-date');
+  if (baseInput) {
+    baseInput.value = ym + '-01';
+  }
+  renderCalendarTab();
+  autoSave();
+}
+
+function renderCalendarTab() {
+  initCalendarTabControls();
+  let baseInput = document.getElementById('cal-base-date');
+  if (!baseInput) return;
+  let baseDate = new Date(baseInput.value || '2026-08-01');
+  renderMonthCalendar(baseDate);
+}
+
+function getFixedAssignmentFallback(curDate, rowIdx) {
+  let dow = curDate.getDay();
+  let fixedDayIdx = (dow === 0) ? 6 : dow - 1;
+  let key = `${rowIdx}_${fixedDayIdx}`;
+  return fixedAssignments[key] || '';
+}
+
+function renderMonthCalendar(baseDate) {
+  let year = baseDate.getFullYear();
+  let month = baseDate.getMonth();
+
+  let titleEl = document.getElementById('cal-month-title');
+  if (titleEl) titleEl.innerText = `📅 ${year}年 ${month + 1}月 カレンダーシフト表`;
+
+  let container = document.getElementById('cal-month-days-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  let firstDay = new Date(year, month, 1);
+  let lastDay = new Date(year, month + 1, 0);
+  let startDow = firstDay.getDay();
+
+  // 月の初日までの空白セル
+  for (let i = 0; i < startDow; i++) {
+    let cell = document.createElement('div');
+    cell.className = 'cal-day-cell other-month';
+    container.appendChild(cell);
+  }
+
+  // 1日から月末まで
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    let curDate = new Date(year, month, day);
+    let yyyy = curDate.getFullYear();
+    let mm = String(curDate.getMonth() + 1).padStart(2, '0');
+    let dd = String(day).padStart(2, '0');
+    let dateStr = `${yyyy}-${mm}-${dd}`;
+
+    let holidayName = getHolidayName(curDate);
+    let dowNum = curDate.getDay();
+
+    let dateNumStyle = '';
+    if (dowNum === 0 || holidayName) dateNumStyle = 'color:#e53e3e;';
+    else if (dowNum === 6) dateNumStyle = 'color:#3182ce;';
+
+    let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag">${holidayName}</span>` : '';
+    
+    let dayHasChange = false;
+    let shiftsHtml = '';
+    let rowIdx = 0;
+
+    slotData.forEach(item => {
+      for (let sIdx = 1; sIdx <= item.slots; sIdx++) {
+        rowIdx++;
+        let key = `${dateStr}_${rowIdx}`;
+        let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
+        let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
+
+        let isItemChanged = (calAssignments[key] !== undefined && calAssignments[key] !== defaultVal);
+        if (isItemChanged) { dayHasChange = true; }
+
+        let itemClass = isItemChanged ? 'cal-shift-item is-modified' : 'cal-shift-item';
+
+        let staffOptHtml = `<select class="editable-input" style="font-size:10px; padding:1px 2px;" onchange="updateCalAssignment('${key}', this.value);">`;
+        staffOptHtml += '<option value="">--未設定--</option>';
+        staffList.forEach(st => {
+          let sel = (currentVal === st.name) ? 'selected' : '';
+          staffOptHtml += `<option value="${st.name}" ${sel}>${st.name}</option>`;
+        });
+        staffOptHtml += '</select>';
+
+        shiftsHtml += `<div class="${itemClass}"><strong>${item.name}${sIdx > 1 ? sIdx : ''}</strong>: ${staffOptHtml}</div>`;
+      }
+    });
+
+    let cell = document.createElement('div');
+    cell.className = dayHasChange ? 'cal-day-cell has-changed' : 'cal-day-cell';
+    let changeTagHtml = dayHasChange ? `<span class="cal-changed-tag">変更あり</span>` : '';
+
+    let headerHtml = `
+      <div class="cal-day-header">
+        <span class="cal-date-num" style="${dateNumStyle}">${day} ${changeTagHtml}</span>
+        ${holidayTagHtml}
+      </div>
+    `;
+
+    cell.innerHTML = headerHtml + shiftsHtml;
+    container.appendChild(cell);
+  }
+}
+
+function updateCalAssignment(key, val) {
+  calAssignments[key] = val;
+  renderCalendarTab();
+  autoSave();
+}
+
+function applyFixedToCal() {
+  if (confirm('③の固定シフト内容を現在の表示月（30日分）に自動一括反映しますか？')) {
+    let picker = document.getElementById('cal-month-picker');
+    let ym = picker ? picker.value : '2026-08';
+    let baseDate = new Date(ym + '-01');
+    let year = baseDate.getFullYear();
+    let month = baseDate.getMonth();
+    let lastDay = new Date(year, month + 1, 0).getDate();
+
+    for (let d = 1; d <= lastDay; d++) {
+      let curDate = new Date(year, month, d);
+      let dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+
+      let rowIdx = 0;
+      slotData.forEach(item => {
+        for (let sIdx = 1; sIdx <= item.slots; sIdx++) {
+          rowIdx++;
+          let key = `${dateStr}_${rowIdx}`;
+          calAssignments[key] = getFixedAssignmentFallback(curDate, rowIdx);
+        }
+      });
+    }
+    renderCalendarTab();
+    autoSave();
+    alert('固定シフトの一括反映が完了しました。');
+  }
+}
 // ==========================================
 // 初期化実行
 // ==========================================
