@@ -8,6 +8,7 @@ let storeList = ['清川二丁目店', '博多住吉通り店'];
 let currentStore = '清川二丁目店';
 let isLoadedFromSheets = false;
 let autoSaveTimer = null;
+let serverLastUpdated = ""; // ★追加：サーバー側の最終更新日時を保持
 
 let slotData = [
   { name: '朝勤', start: '08:00', end: '13:00', slots: 1, colorClass: 'bg-morning' },
@@ -161,6 +162,7 @@ function loadAllFromSheets() {
         }
 
         isLoadedFromSheets = true;
+        serverLastUpdated = data.lastUpdated || ""; // ★追加
         recalculateAll();
         renderStaffTable();
         renderFixedShiftTable();
@@ -225,6 +227,7 @@ function saveAllNow() {
     let nr = document.getElementById('night-rate');
 
     let payload = {
+      clientLastUpdated: serverLastUpdated, // ★追加：自分が保持しているタイムスタンプを送信
       slotData: slotData,
       staffList: staffList,
       fixedAssignments: fixedAssignments,
@@ -237,17 +240,25 @@ function saveAllNow() {
       }
     };
 
+    // fetchでレスポンスを受け取るため no-cors を外し、POSTレスポンスを解析する
     fetch(GAS_URL, {
       method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // GASのCORS制限回避のためのプラクティス
       body: JSON.stringify(payload)
-    }).then(() => {
-      setTimeout(() => {
-        hideLoading();
-        resolve();
-      }, 400); // 演出用のわずかなウェイト
-    }).catch(err => {
+    })
+    .then(res => res.json())
+    .then(data => {
+      hideLoading();
+      if (data.status === "conflict") {
+        alert("⚠️ 【競合エラー】\n" + data.message);
+        // 必要に応じて強制再読み込み
+        loadAllFromSheets();
+      } else if (data.status === "success") {
+        serverLastUpdated = data.lastUpdated; // 成功したらタイムスタンプを更新
+      }
+      resolve();
+    })
+    .catch(err => {
       hideLoading();
       console.error("保存エラー:", err);
       resolve();
