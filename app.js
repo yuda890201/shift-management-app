@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 完全統合版)
+// フロントエンド制御ロジック (app.js - 改善・完全版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -28,7 +28,6 @@ let calAssignments = {};
 let offRequestsStore = {};
 const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
 
-// ダミー履歴データ（サマリー用）
 const HISTORICAL_6MONTH_DATA = {
   "下城": { prescribed: 106, urgentOff: 1, reqOff: 2, helpCount: 0 },
   "スレンドラ": { prescribed: 120, urgentOff: 0, reqOff: 1, helpCount: 2 }
@@ -139,7 +138,7 @@ function switchStore(storeName) {
 }
 
 // ==========================================
-// クラウド読み込み (Load)
+// クラウド読み込み・保存
 // ==========================================
 function loadAllFromSheets() {
   showLoading("クラウドからデータを読み込んでいます...");
@@ -183,9 +182,6 @@ function loadAllFromSheets() {
     });
 }
 
-// ==========================================
-// クラウド保存 (Save)
-// ==========================================
 function autoSave() {
   if (!isLoadedFromSheets) return;
   clearTimeout(autoSaveTimer);
@@ -510,7 +506,7 @@ function initCalendarTabControls() {
   picker.innerHTML = '';
 
   let baseInput = document.getElementById('cal-base-date');
-  let baseDate = new Date(baseInput ? baseInput.value : '2026-08-01');
+  let baseDate = new Date(baseInput ? baseInput.value : Date.now());
 
   for (let i = 0; i < 12; i++) {
     let d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
@@ -535,7 +531,7 @@ function renderCalendarTab() {
   initCalendarTabControls();
   let baseInput = document.getElementById('cal-base-date');
   if (!baseInput) return;
-  let baseDate = new Date(baseInput.value || '2026-08-01');
+  let baseDate = new Date(baseInput.value || Date.now());
   renderMonthCalendar(baseDate);
 }
 
@@ -646,7 +642,7 @@ function applyFixedToCal() {
 }
 
 // ==========================================
-// ⑤ 休み実績・希望休入力ロジック (オリジナル完全版)
+// ⑤ 休み実績・希望休入力ロジック (今日から30日間・常時表示対応)
 // ==========================================
 function renderOffInputTab() {
   let selectEl = document.getElementById('off-staff-select');
@@ -664,8 +660,10 @@ function renderOffInputTab() {
   });
 
   let selectedStaff = selectEl.value || (staffList[0] ? staffList[0].name : '');
-  let baseInput = document.getElementById('off-base-date')?.value;
-  let baseDate = new Date(baseInput || '2026-08-01');
+  
+  // 常に「今日」を起点として今後30日間を対象にする
+  let today = new Date();
+  today.setHours(0,0,0,0);
 
   let urgentTbody = document.getElementById('off-urgent-tbody');
   let normalTbody = document.getElementById('off-normal-tbody');
@@ -677,7 +675,9 @@ function renderOffInputTab() {
   let dowNames = ['日', '月', '火', '水', '木', '金', '土'];
 
   for (let offset = 0; offset <= 30; offset++) {
-    let targetDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + offset);
+    let targetDate = new Date(today.getTime());
+    targetDate.setDate(today.getDate() + offset);
+
     let yyyy = targetDate.getFullYear();
     let mm = String(targetDate.getMonth() + 1).padStart(2, '0');
     let dd = String(targetDate.getDate()).padStart(2, '0');
@@ -710,7 +710,7 @@ function renderOffInputTab() {
               </span>
             </td>
             <td>
-              <input type="text" class="editable-input" value="${noteVal}" placeholder="理由を入力" onchange="updateOffReason('${key}', this.value)">
+              <input type="text" class="editable-input" value="${noteVal}" placeholder="○○さんと交代しました 等" onchange="updateOffReason('${key}', this.value)">
             </td>
           `;
 
@@ -722,10 +722,10 @@ function renderOffInputTab() {
   }
 
   if (urgentTbody.children.length === 0) {
-    urgentTbody.innerHTML = '<tr><td colspan="5" style="color:gray; text-align:center;">※15日未満に勤務予定のシフトはありません。</td></tr>';
+    urgentTbody.innerHTML = '<tr><td colspan="5" style="color:gray; text-align:center;">※直近15日以内に該当スタッフの勤務予定はありません。</td></tr>';
   }
   if (normalTbody.children.length === 0) {
-    normalTbody.innerHTML = '<tr><td colspan="5" style="color:gray; text-align:center;">※15日〜30日後に勤務予定のシフトはありません。</td></tr>';
+    normalTbody.innerHTML = '<tr><td colspan="5" style="color:gray; text-align:center;">※16日〜30日後に該当スタッフの勤務予定はありません。</td></tr>';
   }
 
   renderOffSummaryTable();
@@ -737,12 +737,12 @@ function renderOffSummaryTable() {
   summaryTbody.innerHTML = '';
 
   let storeName = document.getElementById('store-select')?.value || currentStore;
-  let baseInput = document.getElementById('off-base-date')?.value || '2026-08-01';
+  let todayStr = new Date().toISOString().split('T')[0];
 
   let pStore = document.getElementById('off-summary-store-name');
   let pDate = document.getElementById('off-summary-base-date');
   if (pStore) pStore.innerText = storeName;
-  if (pDate) pDate.innerText = baseInput;
+  if (pDate) pDate.innerText = todayStr;
 
   staffList.forEach(s => {
     let hist = HISTORICAL_6MONTH_DATA[s.name] || { prescribed: 106, urgentOff: 0, reqOff: 0, helpCount: 0 };
@@ -829,7 +829,7 @@ function updateOffReason(key, reasonVal) {
 }
 
 // ==========================================
-// ⑥ ヘルプ募集・管理機能 (オリジナル完全版)
+// ⑥ ヘルプ募集・管理機能 (候補者横並び・自分自身も応募可能対応)
 // ==========================================
 function renderHelpTab() {
   let urgentTbody = document.getElementById('help-urgent-tbody');
@@ -845,23 +845,24 @@ function renderHelpTab() {
     let req = offRequestsStore[key];
     let tr = document.createElement('tr');
 
-    let candHtml = '<div style="display:flex; flex-direction:column; gap:4px;">';
+    // ★修正案: スタッフのチェックボックスを縦ではなく「横並び（flex）」にして余白をスッキリさせる
+    let candHtml = '<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">';
     staffList.forEach(s => {
-      if (s.name !== req.staffName) {
-        let isCand = req.candidates && req.candidates[s.name];
-        let checked = isCand ? 'checked' : '';
-        let tsText = isCand ? `<span class="candidate-timestamp">⏱ ${req.candidates[s.name]}</span>` : '';
+      // 以前は `s.name !== req.staffName` で本人の除外をしていましたが、
+      // ご要望により「自分自身も応募可能にする」ため全員を対象にリストアップします
+      let isCand = req.candidates && req.candidates[s.name];
+      let checked = isCand ? 'checked' : '';
+      let tsText = isCand ? `<span class="candidate-timestamp" style="font-size:10px; color:gray;">(${req.candidates[s.name]})</span>` : '';
 
-        candHtml += `
-          <div class="candidate-item">
-            <label style="cursor:pointer; font-weight:normal; display:flex; align-items:center; gap:4px;">
-              <input type="checkbox" ${checked} onchange="toggleHelpCandidate('${key}', '${s.name}', this.checked)">
-              <strong>${s.name}</strong>
-            </label>
-            ${tsText}
-          </div>
-        `;
-      }
+      candHtml += `
+        <div class="candidate-item" style="background:#f7fafc; padding:4px 8px; border-radius:4px; border:1px solid #e2e8f0; display:flex; align-items:center; gap:4px;">
+          <label style="cursor:pointer; font-weight:normal; display:flex; align-items:center; gap:4px; margin:0; font-size:12px;">
+            <input type="checkbox" ${checked} onchange="toggleHelpCandidate('${key}', '${s.name}', this.checked)">
+            <strong>${s.name}</strong>
+          </label>
+          ${tsText}
+        </div>
+      `;
     });
     candHtml += '</div>';
 
@@ -871,18 +872,16 @@ function renderHelpTab() {
     let selHtml = `<select class="editable-input" id="mgr-select-${key}" style="font-size:12px; margin-bottom:4px;" ${finalized ? 'disabled' : ''}>`;
     selHtml += `<option value="">-- 決定スタッフを選択 --</option>`;
     staffList.forEach(s => {
-      if (s.name !== req.staffName) {
-        let isCand = req.candidates && req.candidates[s.name];
-        let sel = (finalized === s.name) ? 'selected' : '';
-        selHtml += `<option value="${s.name}" ${sel}>${s.name} ${isCand ? '[候補あり]' : ''}</option>`;
-      }
+      let isCand = req.candidates && req.candidates[s.name];
+      let sel = (finalized === s.name) ? 'selected' : '';
+      selHtml += `<option value="${s.name}" ${sel}>${s.name} ${isCand ? '[候補あり]' : ''}</option>`;
     });
     selHtml += `</select>`;
 
     let isApproved = finalized ? 'checked' : '';
     let approvalBox = `
       <div class="manager-decision-box">
-        <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+        <label style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:12px;">
           <input type="checkbox" ${isApproved} onchange="toggleManagerApproval('${key}', this.checked)">
           <span>👑 責任者決定 (確定反映)</span>
         </label>
@@ -892,10 +891,10 @@ function renderHelpTab() {
     managerHtml += selHtml + approvalBox + `</div>`;
 
     tr.innerHTML = `
-      <td>2026/08/01</td>
+      <td>${new Date().toISOString().split('T')[0].replace(/-/g, '/')}</td>
       <td><strong>${req.dateStr}</strong></td>
       <td><strong>${req.staffName}</strong></td>
-      <td><span class="sidebar-stat-badge">${req.slotName}</span><br><small style="color:gray;">(${req.reason || '私用'})</small></td>
+      <td><span class="sidebar-stat-badge">${req.slotName}</span><br><small style="color:gray;">(${req.reason || 'コメントなし'})</small></td>
       <td>${candHtml}</td>
       <td>${managerHtml}</td>
     `;
