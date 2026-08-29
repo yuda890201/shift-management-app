@@ -19,24 +19,32 @@
 </head>
 <body>
 
-  <nav class="navbar no-print">
-    <div class="nav-brand">🏪 シフト管理アプリ</div>
-    <div class="nav-tabs" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-      <!-- メイン現場用タブ -->
-      <div style="display: flex; gap: 4px;">
-        <button class="tab-btn active" onclick="switchTab('tab-calendar')">📅 暦シフト (1週間)</button>
-        <button class="tab-btn" onclick="switchTab('tab-off-input')">🏖️ 休み実績・申請</button>
-        <button class="tab-btn" onclick="switchTab('tab-help')">🚨 ヘルプ募集</button>
-      </div>
-      
-      <!-- 管理者設定用アイコンボタン -->
-      <div style="display: flex; gap: 6px;">
-        <button class="tab-btn" title="シフト枠設定" onclick="switchTab('tab-slots')" style="padding: 6px 10px; font-size: 14px;">⚙️ 枠設定</button>
-        <button class="tab-btn" title="スタッフ管理" onclick="switchTab('tab-staff')" style="padding: 6px 10px; font-size: 14px;">👥 スタッフ</button>
-        <button class="tab-btn" title="固定シフト表" onclick="switchTab('tab-fixed')" style="padding: 6px 10px; font-size: 14px;">📌 固定表</button>
-      </div>
+<nav class="navbar no-print">
+  <div class="nav-brand">🏪 シフト管理アプリ</div>
+  <div class="nav-tabs" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+    
+    <!-- メイン現場用タブ -->
+    <div style="display: flex; gap: 4px;">
+      <button class="tab-btn active" onclick="switchTab('tab-calendar')">📅 暦シフト (1週間)</button>
+      <button class="tab-btn" onclick="switchTab('tab-off-input')">🏖️ 休み実績・申請</button>
+      <button class="tab-btn" onclick="switchTab('tab-help')">🚨 ヘルプ募集</button>
     </div>
-  </nav>
+    
+    <!-- 中央・右寄り：バックアップ＆復元ボタン（ヘッダー常設） -->
+    <div style="display: flex; gap: 6px; background: rgba(255,255,255,0.15); padding: 4px 8px; border-radius: 6px;">
+      <button class="tab-btn" onclick="manualBackup()" style="background: #38a169; color: white; border: none; padding: 5px 8px; font-size: 12px; cursor: pointer;">💾 バックアップ</button>
+      <button class="tab-btn" onclick="manualRestore()" style="background: #e53e3e; color: white; border: none; padding: 5px 8px; font-size: 12px; cursor: pointer;">🔄 復元</button>
+    </div>
+
+    <!-- 管理者設定用アイコンボタン -->
+    <div style="display: flex; gap: 6px;">
+      <button class="tab-btn" title="シフト枠設定" onclick="switchTab('tab-slots')" style="padding: 6px 10px; font-size: 14px;">⚙️ 枠設定</button>
+      <button class="tab-btn" title="スタッフ管理" onclick="switchTab('tab-staff')" style="padding: 6px 10px; font-size: 14px;">👥 スタッフ</button>
+      <button class="tab-btn" title="固定シフト表" onclick="switchTab('tab-fixed')" style="padding: 6px 10px; font-size: 14px;">📌 固定表</button>
+    </div>
+    
+  </div>
+</nav>
 
   <div class="container">
 
