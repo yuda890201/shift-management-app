@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 最終ブラッシュアップ版)
+// フロントエンド制御ロジック (app.js - 完全レスポンシブ・最終版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -26,7 +26,7 @@ let staffList = [
 let fixedAssignments = {};
 let calAssignments = {};
 let offRequestsStore = {};
-let calMemoAssignments = {}; // 突発休み・遅刻などのメモステータス用
+let calMemoAssignments = {}; 
 const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
 
 const TIME_OPTIONS = (() => {
@@ -241,13 +241,8 @@ function loadAllFromSheets() {
     });
 }
 
-// ==========================================
-// クラウド保存 (完全ガード版)
-// ==========================================
 function autoSave() {
-  // ★重要ガード：まだクラウドからロードが終わっていない時は絶対に勝手に保存させない
   if (!isLoadedFromSheets) return;
-  
   clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
     silentSaveToSheets();
@@ -256,7 +251,6 @@ function autoSave() {
 
 function silentSaveToSheets() {
   if (!isLoadedFromSheets) return;
-  
   let mw = document.getElementById('min-wage');
   let nr = document.getElementById('night-rate');
 
@@ -287,13 +281,6 @@ function silentSaveToSheets() {
 function saveAllNow() {
   return new Promise((resolve) => {
     clearTimeout(autoSaveTimer);
-    
-    // まだロードが終わっていない場合は保存処理をスキップ
-    if (!isLoadedFromSheets) {
-      resolve();
-      return;
-    }
-
     showLoading("データを保存しています...");
 
     let mw = document.getElementById('min-wage');
@@ -325,8 +312,6 @@ function saveAllNow() {
       if (data.status === "conflict") {
         alert("⚠️ 【競合エラー】\n" + data.message);
         loadAllFromSheets();
-      } else if (data.status === "error") {
-        alert("⚠️ 【保存エラー】\n" + data.message);
       } else if (data.status === "success") {
         serverLastUpdated = data.lastUpdated;
       }
@@ -659,7 +644,7 @@ function updateSidebarStats() {
 }
 
 // ==========================================
-// ④ 暦シフト表 (スタッフ名固定表示 ＋ 突発メモ選択 ＋ 縦並びスクロールガント)
+// ④ 暦シフト表 (月曜〜日曜の自動取得・レスポンシブガント・全ハイライト対応)
 // ==========================================
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
@@ -691,11 +676,23 @@ function onMonthPickerChange() {
 function renderCalendarTab() {
   initCalendarTabControls();
   let baseInput = document.getElementById('cal-base-date');
-  if (!baseInput) return;
-  let baseDate = new Date(baseInput.value || Date.now());
   
+  // ★修正: 再読み込み時などに勝手に1か月モードに戻らないよう、未設定なら「今日」を起点に「1週間表示(week)」をデフォルトにする
   let modeSelect = document.getElementById('cal-mode-select');
+  if (modeSelect && !modeSelect.value) {
+    modeSelect.value = 'week';
+  }
   let mode = modeSelect ? modeSelect.value : 'week';
+
+  if (!baseInput.value) {
+    let now = new Date();
+    let yyyy = now.getFullYear();
+    let mm = String(now.getMonth() + 1).padStart(2, '0');
+    let dd = String(now.getDate()).padStart(2, '0');
+    baseInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  let baseDate = new Date(baseInput.value);
 
   if (mode === 'week') {
     renderWeekGanttCalendar(baseDate);
@@ -711,8 +708,7 @@ function getFixedAssignmentFallback(curDate, rowIdx) {
   return fixedAssignments[key] || '';
 }
 
-// 1週間ガントチャート表示 ＆ 下部ミニガントチャート（曜日ごと縦並びスクロール）
-// 1週間ガントチャート表示（曜日ごと縦並び・ガント図画面幅100%対応）
+// 1週間ガントチャート表示 (月曜〜日曜の自動算出 ＆ 端末幅100%自動追従)
 function renderWeekGanttCalendar(baseDate) {
   let titleEl = document.getElementById('cal-month-title');
   let container = document.getElementById('cal-month-days-container');
@@ -720,19 +716,22 @@ function renderWeekGanttCalendar(baseDate) {
   container.innerHTML = '';
 
   let currentDay = new Date(baseDate);
-  let dow = currentDay.getDay();
+  let dow = currentDay.getDay(); // 0:日, 1:月, ... 6:土
+  
+  // ★修正: 月曜日を週の起点にするロジック (日曜日の場合は前週の月曜とする)
+  let diffToMonday = (dow === 0) ? -6 : (1 - dow);
   let startOfWeek = new Date(currentDay);
-  startOfWeek.setDate(currentDay.getDate() - dow);
+  startOfWeek.setDate(currentDay.getDate() + diffToMonday);
 
   if (titleEl) {
     let startYMD = `${startOfWeek.getFullYear()}年${startOfWeek.getMonth()+1}月${startOfWeek.getDate()}日`;
     let endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     let endYMD = `${endOfWeek.getMonth()+1}月${endOfWeek.getDate()}日`;
-    titleEl.innerText = `📅 1週間ガント表示 (${startYMD} 〜 ${endYMD})`;
+    titleEl.innerText = `📅 1週間ガント表示 (月曜〜日曜: ${startYMD} 〜 ${endYMD})`;
   }
 
-  let dowNames = ['日', '月', '火', '水', '木', '金', '土'];
+  let dowNames = ['月', '火', '水', '木', '金', '土', '日'];
 
   let getOffsetPercent = (timeStr) => {
     let h = timeToHours(timeStr);
@@ -741,7 +740,7 @@ function renderWeekGanttCalendar(baseDate) {
     return (adjusted / 24) * 100;
   };
 
-  // 曜日ごとの縦並びスクロールコンテナ（画面幅いっぱい）
+  // 端末幅いっぱいに広がるレスポンシブなスクロールコンテナ
   let scrollWrapper = document.createElement('div');
   scrollWrapper.style.cssText = "width: 100%; max-height: 700px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; background: #fafafa; box-sizing: border-box;";
 
@@ -764,14 +763,14 @@ function renderWeekGanttCalendar(baseDate) {
 
     let headerHtml = `
       <div style="border-bottom: 2px solid #edf2f7; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="${dateNumStyle} font-weight: bold; font-size: 15px;">${curDate.getMonth()+1}月${curDate.getDate()}日 (${dowNames[dowNum]})</span>
+        <span style="${dateNumStyle} font-weight: bold; font-size: 15px;">${curDate.getMonth()+1}月${curDate.getDate()}日 (${dowNames[i]})</span>
         ${holidayTagHtml}
       </div>
     `;
 
-    let shiftsContentHtml = '<div style="display: flex; flex-direction: column; gap: 8px;">';
-    // 下部ガントチャート図（幅100%展開）
-    let ganttRowsHtml = '<div style="margin-top: 12px; border-top: 1px dashed #cbd5e0; padding-top: 10px; width: 100%;"><div style="font-size: 11px; color: gray; font-weight: bold; margin-bottom: 6px;">ガントチャート図:</div>';
+    let shiftsContentHtml = '<div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">';
+    // ガントチャート図（親要素の幅100%に完全に自動追従）
+    let ganttRowsHtml = '<div style="margin-top: 12px; border-top: 1px dashed #cbd5e0; padding-top: 10px; width: 100%; box-sizing: border-box;"><div style="font-size: 11px; color: gray; font-weight: bold; margin-bottom: 6px;">ガントチャート図:</div>';
 
     let rowIdx = 0;
     slotData.forEach(item => {
@@ -814,7 +813,7 @@ function renderWeekGanttCalendar(baseDate) {
         `;
 
         shiftsContentHtml += `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 4px; ${itemBg} border: 1px solid #e2e8f0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 4px; ${itemBg} border: 1px solid #e2e8f0; width: 100%; box-sizing: border-box;">
             <div>
               <span style="font-weight: bold; font-size: 13px;">${item.name} (${item.start}-${item.end})</span>
               <span style="margin-left: 12px; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; ${badgeStyle}">${assignedVal}</span>
@@ -826,14 +825,14 @@ function renderWeekGanttCalendar(baseDate) {
           </div>
         `;
 
-        // 下部ガントチャートバー（画面幅いっぱいに伸びる仕様）
+        // ガントチャートのバー（横幅100%に自動追従）
         let startPct = getOffsetPercent(item.start);
         let widthPct = (calcDuration(item.start, item.end) / 24) * 100;
         ganttRowsHtml += `
-          <div style="font-size: 11px; color: #4a5568; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; width: 100%;">
-            <span style="width: 130px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name} (${assignedVal}):</span>
-            <div style="flex-grow: 1; position: relative; height: 18px; background: #edf2f7; border-radius: 3px;">
-              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 10px; line-height: 18px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px;" title="${assignedVal}">${assignedVal}${currentMemo ? `(${currentMemo})` : ''}</div>
+          <div style="font-size: 11px; color: #4a5568; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;">
+            <span style="width: 140px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;">${item.name} (${assignedVal}):</span>
+            <div style="flex-grow: 1; position: relative; height: 20px; background: #edf2f7; border-radius: 3px; width: 100%;">
+              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 10px; line-height: 20px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px;" title="${assignedVal}">${assignedVal}${currentMemo ? `(${currentMemo})` : ''}</div>
             </div>
           </div>
         `;
@@ -850,8 +849,7 @@ function renderWeekGanttCalendar(baseDate) {
   container.appendChild(scrollWrapper);
 }
 
-// 1か月テーブルマトリクス表示
-// 1か月テーブルマトリクス表示（突発メモの連動反映対応）
+// 1か月テーブルマトリクス表示 (アイコンだけでなくテキストも含めて全体をハイライト)
 function renderMonthTableCalendar(baseDate) {
   let year = baseDate.getFullYear();
   let month = baseDate.getMonth();
@@ -894,14 +892,14 @@ function renderMonthTableCalendar(baseDate) {
         let key = `${dateStr}_${rowIdx}`;
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
         let assignedVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
-        let currentMemo = calMemoAssignments[key] || ''; // 突発メモ（突発休み・遅刻・早退など）
+        let currentMemo = calMemoAssignments[key] || '';
 
+        // ★修正: 突発メモ（突発休み・遅刻・早退など）がある場合は、テキスト全体を赤系でガッツリハイライト
         let badgeBg = '#ebf8ff';
         let badgeColor = '#2b6cb0';
 
-        // ステータスに応じたカラーとバッジの調整
         if (currentMemo) {
-          badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; // 突発メモがある場合は赤系で目立たせる
+          badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; // テキスト全体を赤系の警告色でハイライト
         } else if (!assignedVal) {
           badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; assignedVal = '未設定';
         } else if (assignedVal === '【ヘルプ募集中】') {
@@ -913,16 +911,15 @@ function renderMonthTableCalendar(baseDate) {
           }
         }
 
-        // 表示テキスト：スタッフ名 ＋ メモがあればバッジ/アイコン表示
         let displayText = assignedVal;
         if (currentMemo) {
-          displayText += ` <span style="font-size:9px; background:#e53e3e; color:white; padding:1px 3px; border-radius:2px;">${currentMemo}</span>`;
+          displayText += ` (${currentMemo})`; // テキスト部分にステータスを明記してハイライト
         }
 
         tableRowsHtml += `
           <tr>
             <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px;">${item.name}</td>
-            <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px; background:${badgeBg}; color:${badgeColor}; font-weight:bold; text-align:center;" title="${currentMemo ? 'ステータス:'+currentMemo : ''}">${displayText}</td>
+            <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px; background:${badgeBg}; color:${badgeColor}; font-weight:bold; text-align:center;">${displayText}</td>
           </tr>
         `;
       }
