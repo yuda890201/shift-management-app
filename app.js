@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 統合・完全版)
+// フロントエンド制御ロジック (app.js - 完全統合版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -646,17 +646,20 @@ function applyFixedToCal() {
 }
 
 // ==========================================
-// ⑤ 休み実績・希望休入力ロジック (ご提示いただいたオリジナル)
+// ⑤ 休み実績・希望休入力ロジック (オリジナル完全版)
 // ==========================================
 function renderOffInputTab() {
   let selectEl = document.getElementById('off-staff-select');
   if (!selectEl) return;
+  
+  let currentSelected = selectEl.value;
   selectEl.innerHTML = '';
 
   staffList.forEach(s => {
     let opt = document.createElement('option');
     opt.value = s.name;
     opt.innerText = s.name;
+    if (s.name === currentSelected) opt.selected = true;
     selectEl.appendChild(opt);
   });
 
@@ -826,7 +829,7 @@ function updateOffReason(key, reasonVal) {
 }
 
 // ==========================================
-// ⑥ ヘルプ募集・管理機能 (ご提示いただいたオリジナル)
+// ⑥ ヘルプ募集・管理機能 (オリジナル完全版)
 // ==========================================
 function renderHelpTab() {
   let urgentTbody = document.getElementById('help-urgent-tbody');
