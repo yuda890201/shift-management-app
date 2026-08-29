@@ -851,6 +851,7 @@ function renderWeekGanttCalendar(baseDate) {
 }
 
 // 1か月テーブルマトリクス表示
+// 1か月テーブルマトリクス表示（突発メモの連動反映対応）
 function renderMonthTableCalendar(baseDate) {
   let year = baseDate.getFullYear();
   let month = baseDate.getMonth();
@@ -893,12 +894,15 @@ function renderMonthTableCalendar(baseDate) {
         let key = `${dateStr}_${rowIdx}`;
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
         let assignedVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
-        let currentMemo = calMemoAssignments[key] || '';
+        let currentMemo = calMemoAssignments[key] || ''; // 突発メモ（突発休み・遅刻・早退など）
 
         let badgeBg = '#ebf8ff';
         let badgeColor = '#2b6cb0';
 
-        if (!assignedVal) {
+        // ステータスに応じたカラーとバッジの調整
+        if (currentMemo) {
+          badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; // 突発メモがある場合は赤系で目立たせる
+        } else if (!assignedVal) {
           badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; assignedVal = '未設定';
         } else if (assignedVal === '【ヘルプ募集中】') {
           badgeBg = '#feebc8'; badgeColor = '#c05621';
@@ -909,10 +913,16 @@ function renderMonthTableCalendar(baseDate) {
           }
         }
 
+        // 表示テキスト：スタッフ名 ＋ メモがあればバッジ/アイコン表示
+        let displayText = assignedVal;
+        if (currentMemo) {
+          displayText += ` <span style="font-size:9px; background:#e53e3e; color:white; padding:1px 3px; border-radius:2px;">${currentMemo}</span>`;
+        }
+
         tableRowsHtml += `
           <tr>
             <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px;">${item.name}</td>
-            <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px; background:${badgeBg}; color:${badgeColor}; font-weight:bold; text-align:center;" title="${currentMemo ? 'メモ:'+currentMemo : ''}">${assignedVal}${currentMemo ? '⚠️' : ''}</td>
+            <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px; background:${badgeBg}; color:${badgeColor}; font-weight:bold; text-align:center;" title="${currentMemo ? 'ステータス:'+currentMemo : ''}">${displayText}</td>
           </tr>
         `;
       }
