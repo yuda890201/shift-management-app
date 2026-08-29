@@ -76,9 +76,12 @@ function hideLoading() {
   let overlay = document.getElementById('loading-overlay');
   if (overlay) overlay.classList.remove('active');
 }
-// 💾 専用のバックアップセルへ手動退避する
+// ==========================================
+// 💾 手動バックアップ ＆ 復元機能（専用領域への退避と読込）
+// ==========================================
+
 function manualBackup() {
-  if (!confirm("現在の状態を専用のバックアップ領域に保存しますか？")) return;
+  if (!confirm("現在の編集内容を専用のバックアップ領域（手動バックアップ）に保存しますか？")) return;
   if (!slotData || slotData.length === 0) {
     alert("エラー: データが空のためバックアップできません。");
     return;
@@ -88,13 +91,21 @@ function manualBackup() {
 
   let payload = {
     action: "backup",
+    config: {
+      storeName: currentStore
+    },
     payload: {
       slotData: slotData,
       staffList: staffList,
       fixedAssignments: fixedAssignments,
       calAssignments: calAssignments,
       offRequestsStore: offRequestsStore,
-      calMemoAssignments: calMemoAssignments
+      calMemoAssignments: calMemoAssignments,
+      config: {
+        minWage: parseFloat(document.getElementById('min-wage')?.value) || 1057,
+        nightRate: parseFloat(document.getElementById('night-rate')?.value) || 1.25,
+        storeName: currentStore
+      }
     }
   };
 
@@ -109,7 +120,7 @@ function manualBackup() {
     if (data.status === "success") {
       alert("✅ バックアップの保存に成功しました！");
     } else {
-      alert("⚠️ エラー: " + data.message);
+      alert("⚠️ エラー: " + (data.message || "不明なエラー"));
     }
   })
   .catch(err => {
@@ -119,13 +130,17 @@ function manualBackup() {
   });
 }
 
-// 🔄 バックアップ領域からメインデータへ復元する
 function manualRestore() {
-  if (!confirm("⚠️ 注意：最後にバックアップした安全な状態に戻します。\n（バックアップ以降に行った未保存の変更は失われますがよろしいですか？）")) return;
+  if (!confirm("⚠️ 注意：最後に手動バックアップした安全な状態に戻します。\n（バックアップ以降に行った未保存の変更は失われますがよろしいですか？）")) return;
 
   showLoading("バックアップから復元中...");
 
-  let payload = { action: "restore" };
+  let payload = {
+    action: "restore",
+    config: {
+      storeName: currentStore
+    }
+  };
 
   fetch(GAS_URL, {
     method: 'POST',
@@ -137,9 +152,9 @@ function manualRestore() {
     hideLoading();
     if (data.status === "success") {
       alert("🔄 バックアップからの復元に成功しました！データを再読み込みします。");
-      loadAllFromSheets(); // メインデータを再読込
+      loadAllFromSheets(); // メインデータを再読込して画面に反映
     } else {
-      alert("⚠️ エラー: " + data.message);
+      alert("⚠️ エラー: " + (data.message || "不明なエラー"));
     }
   })
   .catch(err => {
