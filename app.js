@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 最終ブラッシュアップ版)
+// フロントエンド制御ロジック (app.js - 完全最終統合版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -27,6 +27,16 @@ let fixedAssignments = {};
 let calAssignments = {};
 let offRequestsStore = {};
 const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
+
+// 時間選択肢（00:00〜23:30 / 30分刻み）
+const TIME_OPTIONS = (() => {
+  let arr = [];
+  for (let h = 0; h < 24; h++) {
+    let hh = String(h).padStart(2, '0');
+    arr.push(`${hh}:00`, `${hh}:30`);
+  }
+  return arr;
+})();
 
 const HISTORICAL_6MONTH_DATA = {
   "下城": { prescribed: 106, urgentOff: 1, reqOff: 2, helpCount: 0 },
@@ -63,6 +73,7 @@ function hideLoading() {
 // 時間・日付計算ユーティリティ
 // ==========================================
 function timeToHours(timeStr) {
+  if (!timeStr) return 0;
   const parts = timeStr.split(':');
   return parseInt(parts[0]) + parseInt(parts[1]) / 60;
 }
@@ -116,7 +127,7 @@ function getHolidayName(dateObj) {
 }
 
 // ==========================================
-// 店舗切り替え
+// 店舗・管理ダイアログ機能
 // ==========================================
 function renderStoreSelect() {
   let sel = document.getElementById('store-select');
@@ -135,6 +146,51 @@ function switchStore(storeName) {
   currentStore = storeName;
   isLoadedFromSheets = false;
   loadAllFromSheets();
+}
+
+function promptAddNewStore() {
+  let name = prompt("追加する新規店舗名を入力してください：");
+  if (name && name.trim() !== "") {
+    let cleanName = name.trim();
+    if (!storeList.includes(cleanName)) {
+      storeList.push(cleanName);
+      currentStore = cleanName;
+      renderStoreSelect();
+      slotData = [
+        { name: '朝勤', start: '08:00', end: '13:00', slots: 1, colorClass: 'bg-morning' },
+        { name: '昼勤', start: '12:00', end: '17:00', slots: 2, colorClass: 'bg-noon' }
+      ];
+      staffList = [{ id: '1', name: 'スタッフA', days: ['月','火','水','木','金'], time: '全時間帯', note: '' }];
+      fixedAssignments = {};
+      calAssignments = {};
+      offRequestsStore = {};
+      saveAllNow().then(() => {
+        loadAllFromSheets();
+      });
+    } else {
+      alert("その店舗名は既に存在します。");
+    }
+  }
+}
+
+function promptRenameStore() {
+  let name = prompt(`店舗「${currentStore}」の新しい名称を入力してください：`, currentStore);
+  if (name && name.trim() !== "" && name.trim() !== currentStore) {
+    let newName = name.trim();
+    let idx = storeList.indexOf(currentStore);
+    if (idx !== -1) {
+      storeList[idx] = newName;
+      currentStore = newName;
+      renderStoreSelect();
+      saveAllNow().then(() => {
+        loadAllFromSheets();
+      });
+    }
+  }
+}
+
+function triggerPrint() {
+  window.print();
 }
 
 // ==========================================
@@ -277,7 +333,6 @@ async function switchTab(tabId) {
   let targetTab = document.getElementById(tabId);
   if (targetTab) targetTab.classList.add('active');
   
-  // 対応するボタンがあればactiveにする
   let btn = document.querySelector(`button[onclick="switchTab('${tabId}')"]`);
   if (btn) btn.classList.add('active');
 
@@ -295,7 +350,7 @@ async function switchTab(tabId) {
 }
 
 // ==========================================
-// ① シフト枠設定 (追加・編集・削除機能)
+// ① シフト枠設定 (選択式時間・6時スタートガント・曜日指定人件費対応)
 // ==========================================
 function recalculateAll() {
   const minWage = parseFloat(document.getElementById('min-wage')?.value) || 1057;
@@ -319,11 +374,27 @@ function recalculateAll() {
     totalDailyCost += dailyCost;
     totalSlotsCount += item.slots;
 
+    // 開始時間のセレクトボックス生成
+    let startSelectHtml = `<select class="editable-input" onchange="updateSlotData(${index}, 'start', this.value)">`;
+    TIME_OPTIONS.forEach(t => {
+      let sel = (item.start === t) ? 'selected' : '';
+      startSelectHtml += `<option value="${t}" ${sel}>${t}</option>`;
+    });
+    startSelectHtml += `</select>`;
+
+    // 終了時間のセレクトボックス生成
+    let endSelectHtml = `<select class="editable-input" onchange="updateSlotData(${index}, 'end', this.value)">`;
+    TIME_OPTIONS.forEach(t => {
+      let sel = (item.end === t) ? 'selected' : '';
+      endSelectHtml += `<option value="${t}" ${sel}>${t}</option>`;
+    });
+    endSelectHtml += `</select>`;
+
     let tr = document.createElement('tr');
     tr.innerHTML = `
       <td><input type="text" class="editable-input" value="${item.name}" onchange="updateSlotData(${index}, 'name', this.value)"></td>
-      <td><input type="text" class="editable-input" value="${item.start}" onchange="updateSlotData(${index}, 'start', this.value)"></td>
-      <td><input type="text" class="editable-input" value="${item.end}" onchange="updateSlotData(${index}, 'end', this.value)"></td>
+      <td>${startSelectHtml}</td>
+      <td>${endSelectHtml}</td>
       <td><strong>${dur.toFixed(1)} h</strong></td>
       <td><input type="number" class="editable-input" value="${item.slots}" min="0" max="5" onchange="updateSlotData(${index}, 'slots', parseInt(this.value)||0)"></td>
       <td><strong>${dailyHours.toFixed(1)} 時間</strong></td>
@@ -347,6 +418,7 @@ function recalculateAll() {
   if (ts) ts.innerText = totalSlotsCount + ' 枠 / 日';
 
   renderGanttChart();
+  renderCustomRangeCost(totalDailyCost);
 }
 
 function updateSlotData(index, field, value) {
@@ -369,17 +441,67 @@ function deleteSlotRow(index) {
   }
 }
 
+// 任意の2曜日間の月間人件費試算
+function renderCustomRangeCost(dailyCostBase) {
+  let rangeEl = document.getElementById('custom-range-cost');
+  if (!rangeEl) return;
+  
+  let d1 = document.getElementById('range-day-1')?.value || '月';
+  let d2 = document.getElementById('range-day-2')?.value || '金';
+  
+  const dowMap = { '日':0, '月':1, '火':2, '水':3, '木':4, '金':5, '土':6 };
+  let target1 = dowMap[d1];
+  let target2 = dowMap[d2];
+
+  // 今月（または直近30日）の中で指定された2曜日間に挟まれた日数をカウント
+  let count = 0;
+  let date = new Date(2026, 7, 1); // 2026年8月基準
+  let lastDay = new Date(2026, 8, 0).getDate();
+
+  for (let i = 1; i <= lastDay; i++) {
+    date.setDate(i);
+    let dow = date.getDay();
+    // target1 から target2 までの曜日（循環考慮）に該当するか
+    if (target1 <= target2) {
+      if (dow >= target1 && dow <= target2) count++;
+    } else {
+      if (dow >= target1 || dow <= target2) count++;
+    }
+  }
+
+  let customCost = dailyCostBase * count;
+  rangeEl.innerText = `(${d1}〜${d2}指定: 計${count}日間) ¥${Math.round(customCost).toLocaleString()}`;
+}
+
+// ガントチャート（6時スタート：06, 08, 10, 12, 14, 16, 18, 20, 22, 00, 02, 04）
 function renderGanttChart() {
   let container = document.getElementById('gantt-chart-container');
   if (!container) return;
   container.innerHTML = '';
+
+  // ヘルパー時間を6時起点（0〜24）にシフトする座標計算
+  // 6時 = 0%、12時 = 25%、18時 = 50%、24時(0時) = 75%、翌6時 = 100%
+  let getOffsetPercent = (timeStr) => {
+    let h = timeToHours(timeStr);
+    let adjusted = h - 6;
+    if (adjusted < 0) adjusted += 24;
+    return (adjusted / 24) * 100;
+  };
+
   slotData.forEach((item) => {
     let dur = calcDuration(item.start, item.end);
-    let startH = timeToHours(item.start);
+    let startPct = getOffsetPercent(item.start);
+    let widthPct = (dur / 24) * 100;
+
     for (let i = 1; i <= item.slots; i++) {
       let row = document.createElement('div');
       row.className = 'gantt-row';
-      row.innerHTML = `<div class="gantt-label">${item.name} 枠${i}</div><div class="gantt-timeline"><div class="gantt-bar-wrapper ${item.colorClass}" style="left:${(startH/24)*100}%; width:${(dur/24)*100}%;">${item.start}-${item.end}</div></div>`;
+      row.innerHTML = `
+        <div class="gantt-label">${item.name} 枠${i}</div>
+        <div class="gantt-timeline" style="position:relative;">
+          <div class="gantt-bar-wrapper ${item.colorClass}" style="left:${startPct}%; width:${widthPct}%;">${item.start}-${item.end}</div>
+        </div>
+      `;
       container.appendChild(row);
     }
   });
@@ -462,16 +584,11 @@ function renderFixedShiftTable() {
         staffOptHtml += '<option value="">-- 未設定 --</option>';
 
         staffList.forEach(s => {
-          // 曜日インデックス（0:月〜6:日）に対応する文字
           let dowCharMap = ['月', '火', '水', '木', '金', '土', '日'];
           let targetDow = dowCharMap[dayIdx];
           let isAvailable = (s.days && s.days.includes(targetDow));
 
-          // 希望に合致するスタッフのみ、または全体の中から希望曜日を明確にして表示
           let daysText = (s.days && s.days.length > 0) ? s.days.join('') : '希望なし';
-          let timeText = s.time || '全時間帯';
-          
-          // 希望曜日に一致しない場合は少し薄く表示するなどの工夫も可能
           let label = `${s.name} (希望:${daysText}${isAvailable ? ' ★出勤可' : ''})`;
           let sel = (assignedVal === s.name) ? 'selected' : '';
           staffOptHtml += `<option value="${s.name}" ${sel}>${label}</option>`;
@@ -536,7 +653,7 @@ function updateSidebarStats() {
 }
 
 // ==========================================
-// ④ 暦シフト表 (1週間表示モードデフォルト ＆ 色分け反映)
+// ④ 暦シフト表 (1週間ガント表示 ＆ 1か月マトリクス表示)
 // ==========================================
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
@@ -572,12 +689,12 @@ function renderCalendarTab() {
   let baseDate = new Date(baseInput.value || Date.now());
   
   let modeSelect = document.getElementById('cal-mode-select');
-  let mode = modeSelect ? modeSelect.value : 'week'; // デフォルトは1週間表示
+  let mode = modeSelect ? modeSelect.value : 'week';
 
   if (mode === 'week') {
-    renderWeekCalendar(baseDate);
+    renderWeekGanttCalendar(baseDate);
   } else {
-    renderMonthCalendar(baseDate);
+    renderMonthMatrixCalendar(baseDate);
   }
 }
 
@@ -588,13 +705,13 @@ function getFixedAssignmentFallback(curDate, rowIdx) {
   return fixedAssignments[key] || '';
 }
 
-function renderWeekCalendar(baseDate) {
+// 1週間ガントチャート方式
+function renderWeekGanttCalendar(baseDate) {
   let titleEl = document.getElementById('cal-month-title');
   let container = document.getElementById('cal-month-days-container');
   if (!container) return;
   container.innerHTML = '';
 
-  // 週の始まり（日曜日または月曜日。ここでは日曜日起点）を計算
   let currentDay = new Date(baseDate);
   let dow = currentDay.getDay();
   let startOfWeek = new Date(currentDay);
@@ -605,10 +722,11 @@ function renderWeekCalendar(baseDate) {
     let endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     let endYMD = `${endOfWeek.getMonth()+1}月${endOfWeek.getDate()}日`;
-    titleEl.innerText = `📅 1週間表示 (${startYMD} 〜 ${endYMD})`;
+    titleEl.innerText = `📅 1週間ガント表示 (${startYMD} 〜 ${endYMD})`;
   }
 
-  // 1週間（7日間）分のグリッドを描画
+  let dowNames = ['日', '月', '火', '水', '木', '金', '土'];
+
   for (let i = 0; i < 7; i++) {
     let curDate = new Date(startOfWeek);
     curDate.setDate(startOfWeek.getDate() + i);
@@ -620,13 +738,9 @@ function renderWeekCalendar(baseDate) {
 
     let holidayName = getHolidayName(curDate);
     let dowNum = curDate.getDay();
-    let dowNames = ['日', '月', '火', '水', '木', '金', '土'];
-
-    let dateNumStyle = '';
-    if (dowNum === 0 || holidayName) dateNumStyle = 'color:#e53e3e;';
-    else if (dowNum === 6) dateNumStyle = 'color:#3182ce;';
-
+    let dateNumStyle = (dowNum === 0 || holidayName) ? 'color:#e53e3e;' : (dowNum === 6 ? 'color:#3182ce;' : '');
     let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag">${holidayName}</span>` : '';
+
     let shiftsHtml = '';
     let rowIdx = 0;
 
@@ -637,7 +751,6 @@ function renderWeekCalendar(baseDate) {
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
         let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
 
-        // 色分け判定（ヘルプ中ならオレンジ、休み希望ならグレー等）
         let itemBg = '';
         if (currentVal === '【ヘルプ募集中】') {
           itemBg = 'background:#fffaf0; border-left:3px solid #dd6b20;';
@@ -660,10 +773,10 @@ function renderWeekCalendar(baseDate) {
 
     let cell = document.createElement('div');
     cell.className = 'cal-day-cell';
-    cell.style.minHeight = '220px';
+    cell.style.minHeight = '240px';
     cell.innerHTML = `
-      <div class="cal-day-header" style="border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:6px;">
-        <span class="cal-date-num" style="${dateNumStyle} font-weight:bold;">${monthName = (curDate.getMonth()+1) + '月' + curDate.getDate() + '日'} (${dowNames[dowNum]})</span>
+      <div class="cal-day-header" style="border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+        <span class="cal-date-num" style="${dateNumStyle} font-weight:bold;">${curDate.getMonth()+1}月${curDate.getDate()}日 (${dowNames[dowNum]})</span>
         ${holidayTagHtml}
       </div>
     ` + shiftsHtml;
@@ -671,12 +784,13 @@ function renderWeekCalendar(baseDate) {
   }
 }
 
-function renderMonthCalendar(baseDate) {
+// 1か月マトリクス（図解・洗練デザイン）方式
+function renderMonthMatrixCalendar(baseDate) {
   let year = baseDate.getFullYear();
   let month = baseDate.getMonth();
 
   let titleEl = document.getElementById('cal-month-title');
-  if (titleEl) titleEl.innerText = `📅 ${year}年 ${month + 1}月 カレンダーシフト表`;
+  if (titleEl) titleEl.innerText = `📅 ${year}年 ${month + 1}月 マトリクスシフト表`;
 
   let container = document.getElementById('cal-month-days-container');
   if (!container) return;
@@ -701,13 +815,10 @@ function renderMonthCalendar(baseDate) {
 
     let holidayName = getHolidayName(curDate);
     let dowNum = curDate.getDay();
+    let dateNumStyle = (dowNum === 0 || holidayName) ? 'color:#e53e3e;' : (dowNum === 6 ? 'color:#3182ce;' : '');
+    let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag" style="font-size:9px; padding:1px 4px;">${holidayName}</span>` : '';
 
-    let dateNumStyle = '';
-    if (dowNum === 0 || holidayName) dateNumStyle = 'color:#e53e3e;';
-    else if (dowNum === 6) dateNumStyle = 'color:#3182ce;';
-
-    let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag">${holidayName}</span>` : '';
-    let shiftsHtml = '';
+    let matrixRowsHtml = '';
     let rowIdx = 0;
 
     slotData.forEach(item => {
@@ -717,29 +828,33 @@ function renderMonthCalendar(baseDate) {
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
         let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
 
-        let itemBg = '';
+        let badgeColor = '#edf2f7';
+        let textColor = '#2d3748';
         if (currentVal === '【ヘルプ募集中】') {
-          itemBg = 'background:#fffaf0; border-left:3px solid #dd6b20;';
-        } else if (offRequestsStore[key]) {
-          itemBg = 'background:#f7fafc; opacity:0.6;';
+          badgeColor = '#feebc8'; textColor = '#c05621';
+        } else if (currentVal) {
+          badgeColor = '#ebf8ff'; textColor = '#2b6cb0';
         }
 
-        let staffOptHtml = `<select class="editable-input" style="font-size:10px; padding:1px 2px;" onchange="updateCalAssignment('${key}', this.value);">`;
-        staffOptHtml += '<option value="">--未設定--</option>';
-        staffList.forEach(st => {
-          let sel = (currentVal === st.name) ? 'selected' : '';
-          staffOptHtml += `<option value="${st.name}" ${sel}>${st.name}</option>`;
-        });
-        staffOptHtml += '<option value="【ヘルプ募集中】">🚨 【ヘルプ募集中】</option>';
-        staffOptHtml += '</select>';
-
-        shiftsHtml += `<div class="cal-shift-item" style="${itemBg}"><strong>${item.name}${sIdx > 1 ? sIdx : ''}</strong>: ${staffOptHtml}</div>`;
+        matrixRowsHtml += `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:${badgeColor}; color:${textColor}; padding:2px 4px; border-radius:3px; margin-bottom:2px; font-size:10px;">
+            <span>${item.name}</span>
+            <strong>${currentVal || '未'}</strong>
+          </div>
+        `;
       }
     });
 
     let cell = document.createElement('div');
     cell.className = 'cal-day-cell';
-    cell.innerHTML = `<div class="cal-day-header"><span class="cal-date-num" style="${dateNumStyle}">${day}</span>${holidayTagHtml}</div>` + shiftsHtml;
+    cell.style.padding = '6px';
+    cell.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #edf2f7; padding-bottom:2px; margin-bottom:4px;">
+        <span style="${dateNumStyle} font-weight:bold; font-size:12px;">${day}</span>
+        ${holidayTagHtml}
+      </div>
+      <div>${matrixRowsHtml}</div>
+    `;
     container.appendChild(cell);
   }
 }
@@ -779,7 +894,7 @@ function applyFixedToCal() {
 }
 
 // ==========================================
-// ⑤ 休み実績・希望休入力ロジック
+// ⑤ 休み実績・希望休入力ロジック (フリーコメント対応)
 // ==========================================
 function renderOffInputTab() {
   let selectEl = document.getElementById('off-staff-select');
@@ -845,7 +960,7 @@ function renderOffInputTab() {
               </span>
             </td>
             <td>
-              <input type="text" class="editable-input" value="${noteVal}" placeholder="○○さんと交代しました 等" onchange="updateOffReason('${key}', this.value)">
+              <input type="text" class="editable-input" value="${noteVal}" placeholder="フリーコメント欄" onchange="updateOffReason('${key}', this.value)">
             </td>
           `;
 
@@ -1026,7 +1141,7 @@ function renderHelpTab() {
       <td>${new Date().toISOString().split('T')[0].replace(/-/g, '/')}</td>
       <td><strong>${req.dateStr}</strong></td>
       <td><strong>${req.staffName}</strong></td>
-      <td><span class="sidebar-stat-badge">${req.slotName}</span><br><small style="color:gray;">(${req.reason || 'コメントなし'})</small></td>
+      <td><span class="sidebar-stat-badge">${req.slotName}</span><br><small style="color:gray;">(${req.reason || 'フリーコメントなし'})</small></td>
       <td>${candHtml}</td>
       <td>${managerHtml}</td>
     `;
@@ -1088,10 +1203,6 @@ function toggleManagerApproval(key, isChecked) {
     autoSave();
   }
 }
-
-function promptAddNewStore() {}
-function promptRenameStore() {}
-function triggerPrint() { window.print(); }
 
 // ==========================================
 // 初期化実行 (初回ロード)
