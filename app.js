@@ -709,6 +709,7 @@ function getFixedAssignmentFallback(curDate, rowIdx) {
 }
 
 // 1週間ガントチャート表示 (月曜〜日曜の自動算出 ＆ 端末幅100%自動追従)
+// 1週間ガントチャート表示 (バー上のスタッフ名クリックでステータス変更対応)
 function renderWeekGanttCalendar(baseDate) {
   let titleEl = document.getElementById('cal-month-title');
   let container = document.getElementById('cal-month-days-container');
@@ -716,9 +717,7 @@ function renderWeekGanttCalendar(baseDate) {
   container.innerHTML = '';
 
   let currentDay = new Date(baseDate);
-  let dow = currentDay.getDay(); // 0:日, 1:月, ... 6:土
-  
-  // ★修正: 月曜日を週の起点にするロジック (日曜日の場合は前週の月曜とする)
+  let dow = currentDay.getDay(); 
   let diffToMonday = (dow === 0) ? -6 : (1 - dow);
   let startOfWeek = new Date(currentDay);
   startOfWeek.setDate(currentDay.getDate() + diffToMonday);
@@ -740,7 +739,6 @@ function renderWeekGanttCalendar(baseDate) {
     return (adjusted / 24) * 100;
   };
 
-  // 端末幅いっぱいに広がるレスポンシブなスクロールコンテナ
   let scrollWrapper = document.createElement('div');
   scrollWrapper.style.cssText = "width: 100%; max-height: 700px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; background: #fafafa; box-sizing: border-box;";
 
@@ -768,9 +766,8 @@ function renderWeekGanttCalendar(baseDate) {
       </div>
     `;
 
-    let shiftsContentHtml = '<div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">';
-    // ガントチャート図（親要素の幅100%に完全に自動追従）
-    let ganttRowsHtml = '<div style="margin-top: 12px; border-top: 1px dashed #cbd5e0; padding-top: 10px; width: 100%; box-sizing: border-box;"><div style="font-size: 11px; color: gray; font-weight: bold; margin-bottom: 6px;">ガントチャート図:</div>';
+    // 上部のスタッフリスト選択欄を非表示にし、ガントチャート図に集中させるため shiftsContentHtml はスッキリ省略またはコンパクトに
+    let ganttRowsHtml = '<div style="width: 100%; box-sizing: border-box;"><div style="font-size: 11px; color: gray; font-weight: bold; margin-bottom: 8px;">📊 ガントチャート図 (バーをタップしてステータス変更):</div>';
 
     let rowIdx = 0;
     slotData.forEach(item => {
@@ -781,72 +778,66 @@ function renderWeekGanttCalendar(baseDate) {
         let assignedVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
         let currentMemo = calMemoAssignments[key] || '';
 
-        let itemBg = 'background:#ffffff;';
-        let badgeStyle = 'background:#ebf8ff; color:#2b6cb0;';
         let barColor = 'background:#2b6cb0;';
-
         if (!assignedVal || assignedVal === '') {
-          itemBg = 'background:#fff5f5; border-left:3px solid #e53e3e;';
-          badgeStyle = 'background:#fed7d7; color:#9b2c2c;';
           barColor = 'background:#e53e3e;';
           assignedVal = '未設定';
         } else if (assignedVal === '【ヘルプ募集中】') {
-          itemBg = 'background:#fffaf0; border-left:3px solid #dd6b20;';
-          badgeStyle = 'background:#feebc8; color:#c05621;';
           barColor = 'background:#dd6b20;';
         } else {
           let req = offRequestsStore[key];
           if (req && req.finalizedStaff && req.finalizedStaff === assignedVal) {
-            itemBg = 'background:#f0fff4; border-left:3px solid #38a169;';
-            badgeStyle = 'background:#c6f6d5; color:#22543d;';
             barColor = 'background:#38a169;';
           }
         }
 
-        let memoSelectHtml = `
-          <select class="editable-input" style="font-size: 11px; padding: 2px; background: #fffaf0; color: #b7791f;" onchange="updateCalMemo('${key}', this.value)">
-            <option value="">-- 突発メモなし --</option>
-            <option value="突発休み" ${currentMemo === '突発休み' ? 'selected' : ''}>⚠️ 突発休み</option>
-            <option value="遅刻" ${currentMemo === '遅刻' ? 'selected' : ''}>⏳ 遅刻</option>
-            <option value="早退" ${currentMemo === '早退' ? 'selected' : ''}>🏃 早退</option>
-          </select>
-        `;
-
-        shiftsContentHtml += `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 4px; ${itemBg} border: 1px solid #e2e8f0; width: 100%; box-sizing: border-box;">
-            <div>
-              <span style="font-weight: bold; font-size: 13px;">${item.name} (${item.start}-${item.end})</span>
-              <span style="margin-left: 12px; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; ${badgeStyle}">${assignedVal}</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              ${currentMemo ? `<span style="font-size:11px; background:#e53e3e; color:white; padding:2px 6px; border-radius:3px;">${currentMemo}</span>` : ''}
-              ${memoSelectHtml}
-            </div>
-          </div>
-        `;
-
-        // ガントチャートのバー（横幅100%に自動追従）
+        // ガントチャートのバー（テキスト部分を直接タップしてステータス変更できるようにセレクトボックスを重ねるか、クリックイベントを付与）
         let startPct = getOffsetPercent(item.start);
         let widthPct = (calcDuration(item.start, item.end) / 24) * 100;
+        
+        // バーの上に透明または選択可能なセレクトを重ねるか、タップ時にプロンプト等でステータス変更できるようにする
         ganttRowsHtml += `
-          <div style="font-size: 11px; color: #4a5568; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;">
-            <span style="width: 140px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;">${item.name} (${assignedVal}):</span>
-            <div style="flex-grow: 1; position: relative; height: 20px; background: #edf2f7; border-radius: 3px; width: 100%;">
-              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 10px; line-height: 20px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px;" title="${assignedVal}">${assignedVal}${currentMemo ? `(${currentMemo})` : ''}</div>
+          <div style="font-size: 11px; color: #4a5568; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;">
+            <span style="width: 130px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;" title="${item.name}">${item.name}:</span>
+            <div style="flex-grow: 1; position: relative; height: 24px; background: #edf2f7; border-radius: 3px; width: 100%;">
+              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 10px; line-height: 24px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; cursor: pointer;" 
+                   onclick="promptChangeMemo('${key}', '${assignedVal}')" 
+                   title="タップしてステータス変更">
+                ${assignedVal}${currentMemo ? ` [${currentMemo}]` : ''} ✏️
+              </div>
             </div>
           </div>
         `;
       }
     });
 
-    shiftsContentHtml += '</div>';
     ganttRowsHtml += '</div>';
-
-    dayBox.innerHTML = headerHtml + shiftsContentHtml + ganttRowsHtml;
+    dayBox.innerHTML = headerHtml + ganttRowsHtml;
     scrollWrapper.appendChild(dayBox);
   }
 
   container.appendChild(scrollWrapper);
+}
+
+// バーをタップしたときに突発ステータスを変更するダイアログ関数
+function promptChangeMemo(key, staffName) {
+  if (staffName === '未設定' || staffName === '【ヘルプ募集中】') {
+    alert("スタッフがアサインされている枠のみステータスを変更できます。");
+    return;
+  }
+  let current = calMemoAssignments[key] || '';
+  let input = prompt(`【${staffName}】のステータスを選択・入力してください。\n(例: 突発休み, 遅刻, 早退 など。空欄にするとクリアされます)`, current);
+  
+  if (input !== null) {
+    let clean = input.trim();
+    if (clean === "") {
+      delete calMemoAssignments[key];
+    } else {
+      calMemoAssignments[key] = clean;
+    }
+    renderCalendarTab();
+    autoSave();
+  }
 }
 
 // 1か月テーブルマトリクス表示 (アイコンだけでなくテキストも含めて全体をハイライト)
