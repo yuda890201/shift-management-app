@@ -457,78 +457,46 @@ th { background-color: #edf2f7; font-weight: bold; color: #4a5568; }
 .sync-saving { background: #feebc8; color: #742a2a; }
 
 /* ==========================================
-   印刷専用の領域絞り込み・最適化スタイル
+   印刷専用の領域絞り込み・1ページ収容スタイル
    ========================================== */
 @media print {
-  /* 1. ページ内のすべての要素を一旦非表示にする */
-  body * {
-    visibility: hidden !important;
+  /* 1. ナビやボタンなど不要な要素をすべて非表示 */
+  .no-print, .navbar, .controls-row, .btn, button {
+    display: none !important;
   }
 
-  /* 2. 印刷したい「暦シフト表のコンテナ（#cal-month-days-container）」とその中身だけを表示する */
-  #cal-month-days-container, 
-  #cal-month-days-container * {
-    visibility: visible !important;
-  }
-
-  /* 3. 印刷対象エリアを左上（印刷用紙の原点）にピタッと合わせ、幅を100%に広げる */
-  #cal-month-days-container {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
+  /* 2. ページ全体を白地にし、マージンを極限まで削る */
+  body, .container, #tab-calendar {
+    background: white !important;
+    color: black !important;
     width: 100% !important;
-    margin: 0 !important;
+    max-width: 100% !important;
     padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 3. 画面内のスクロール制限（縦長の枠）を強制解除してすべて展開する */
+  div[style*="max-height"] {
     max-height: none !important;
     overflow: visible !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
   }
 
-  /* 4. 上部のタイトル（「📅 1週間ガント表示...」など）も一緒に印刷に含めたい場合はここに追加 */
-  #cal-month-title,
-  #cal-month-title * {
-    visibility: visible !important;
-  }
-  #cal-month-title {
-    position: absolute !important;
-    left: 0 !important;
-    top: -30px !important;
-    font-size: 14px !important;
-  }
-
-  /* 5. カラーの維持と1ページ収容の調整 */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-}
-
-  /* ガントチャートやカレンダーのコンテナを1ページ内に縮小収容 */
-  #cal-month-days-container {
-    max-height: none !important;
-    overflow: visible !important;
-    zoom: 85% !important; /* 全体を少し縮小して1ページに収める */
-  }
-
-  /* 画面と同じ背景色・バーの色を強制的に印刷に反映させる */
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  /* 各日カードの余白をコンパクトにする */
-  .cal-day-cell, div[style*="background: white"] {
+  /* 4. 1週間分のカード（dayBox）が途中で切れないようにする */
+  #cal-month-days-container > div > div {
     page-break-inside: avoid !important;
-    margin-bottom: 8px !important;
-    padding: 8px !important;
+    break-inside: avoid !important;
+    margin-bottom: 10px !important;
+    border: 1px solid #ccc !important;
   }
-}
 
-.table-responsive {
-  width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  margin-top: 10px;
-  margin-bottom: 12px;
+  /* 5. 画面と同じ背景色・バーの色を強制的に印刷に反映 */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
 }
 
 @media (max-width: 768px) {
