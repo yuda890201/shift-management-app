@@ -105,14 +105,10 @@
 
       <div class="gantt-section">
         <h3>📊 シフト枠 24時間ガントチャート</h3>
-        <div class="gantt-header-row">
-          <div class="gantt-hour-cell">00</div><div class="gantt-hour-cell">02</div>
-          <div class="gantt-hour-cell">04</div><div class="gantt-hour-cell">06</div>
-          <div class="gantt-hour-cell">08</div><div class="gantt-hour-cell">10</div>
-          <div class="gantt-hour-cell">12</div><div class="gantt-hour-cell">14</div>
-          <div class="gantt-hour-cell">16</div><div class="gantt-hour-cell">18</div>
-          <div class="gantt-hour-cell">20</div><div class="gantt-hour-cell">22</div>
-        </div>
+<div class="gantt-header-row" style="font-size:11px; display:flex; justify-content:space-between; padding:0 4px; color:gray;">
+  <div>08</div><div>10</div><div>12</div><div>14</div><div>16</div><div>18</div>
+  <div>20</div><div>22</div><div>00</div><div>02</div><div>04</div><div>06</div>
+</div>
         <div id="gantt-chart-container"></div>
       </div>
     </div>
@@ -175,10 +171,10 @@
             <option value="month">1か月表示</option>
             <option value="week">1週間表示</option>
           </select>
-          <button class="btn btn-success" onclick="triggerPrint()">🖨️ 暦シフトを印刷</button>
         </label>
         <select id="cal-month-picker" onchange="onMonthPickerChange()"></select>
         <button class="btn" onclick="applyFixedToCal()">③の固定シフトを自動反映</button>
+        <button class="btn btn-success" onclick="triggerPrint()">🖨️ 暦シフトを印刷</button>
       </div>
       <div id="cal-month-view">
         <div id="cal-month-title" style="font-weight:bold; font-size:15px; color:var(--primary); margin-bottom:10px;"></div>
