@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 最終完全版)
+// フロントエンド制御ロジック (app.js - 最終ブラッシュアップ版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -26,6 +26,7 @@ let staffList = [
 let fixedAssignments = {};
 let calAssignments = {};
 let offRequestsStore = {};
+let calMemoAssignments = {}; // 突発休み・遅刻などのメモステータス用
 const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
 
 const TIME_OPTIONS = (() => {
@@ -163,6 +164,7 @@ function promptAddNewStore() {
       fixedAssignments = {};
       calAssignments = {};
       offRequestsStore = {};
+      calMemoAssignments = {};
       saveAllNow().then(() => {
         loadAllFromSheets();
       });
@@ -212,6 +214,7 @@ function loadAllFromSheets() {
         if (data.fixedAssignments) fixedAssignments = data.fixedAssignments;
         if (data.calAssignments) calAssignments = data.calAssignments;
         if (data.offRequestsStore) offRequestsStore = data.offRequestsStore;
+        if (data.calMemoAssignments) calMemoAssignments = data.calMemoAssignments;
         
         if (data.config) {
           let mw = document.getElementById('min-wage');
@@ -257,6 +260,7 @@ function silentSaveToSheets() {
     fixedAssignments: fixedAssignments,
     calAssignments: calAssignments,
     offRequestsStore: offRequestsStore,
+    calMemoAssignments: calMemoAssignments,
     config: {
       minWage: mw ? parseFloat(mw.value) : 1057,
       nightRate: nr ? parseFloat(nr.value) : 1.25,
@@ -289,6 +293,7 @@ function saveAllNow() {
       fixedAssignments: fixedAssignments,
       calAssignments: calAssignments,
       offRequestsStore: offRequestsStore,
+      calMemoAssignments: calMemoAssignments,
       config: {
         minWage: mw ? parseFloat(mw.value) : 1057,
         nightRate: nr ? parseFloat(nr.value) : 1.25,
@@ -349,7 +354,7 @@ async function switchTab(tabId) {
 }
 
 // ==========================================
-// ① シフト枠設定 (8時〜32時起点ガント・余子小・並び替え)
+// ① シフト枠設定
 // ==========================================
 function recalculateAll() {
   const minWage = parseFloat(document.getElementById('min-wage')?.value) || 1057;
@@ -461,16 +466,14 @@ function moveSlot(index, direction) {
   autoSave();
 }
 
-// 枠設定画面のガントチャート（8時〜32時起点・余白最小化）
 function renderGanttChart() {
   let container = document.getElementById('gantt-chart-container');
   if (!container) return;
   container.innerHTML = '';
 
-  // 8時 = 0%、32時（翌8時）= 100% (総計24時間)
   let getOffsetPercent = (timeStr) => {
     let h = timeToHours(timeStr);
-    if (h < 8) h += 24; // 8時未満（深夜早朝）は翌日扱いとして加算
+    if (h < 8) h += 24;
     let adjusted = h - 8;
     return (adjusted / 24) * 100;
   };
@@ -483,7 +486,7 @@ function renderGanttChart() {
     for (let i = 1; i <= item.slots; i++) {
       let row = document.createElement('div');
       row.className = 'gantt-row';
-      row.style.margin = '2px 0'; // 余白を小さく調整
+      row.style.margin = '2px 0';
       row.innerHTML = `
         <div class="gantt-label" style="font-size:11px;">${item.name} 枠${i}</div>
         <div class="gantt-timeline" style="position:relative; height:20px;">
@@ -550,7 +553,7 @@ function addStaffRow() {
 }
 
 // ==========================================
-// ③ 固定シフト表 (希望曜日カウント修正版)
+// ③ 固定シフト表
 // ==========================================
 function renderFixedShiftTable() {
   let tbody = document.getElementById('fixed-table-body');
@@ -641,7 +644,7 @@ function updateSidebarStats() {
 }
 
 // ==========================================
-// ④ 暦シフト表 (1週間ガント＆スタッフ名印字、1か月テーブルマトリクス)
+// ④ 暦シフト表 (スタッフ名固定表示 ＋ 突発メモ選択 ＋ 縦並びスクロールガント)
 // ==========================================
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
@@ -693,7 +696,7 @@ function getFixedAssignmentFallback(curDate, rowIdx) {
   return fixedAssignments[key] || '';
 }
 
-// 1週間ガントチャート表示 ＆ 下部ミニガントチャート図（スタッフ名印字）併記
+// 1週間ガントチャート表示 ＆ 下部ミニガントチャート（曜日ごと縦並びスクロール）
 function renderWeekGanttCalendar(baseDate) {
   let titleEl = document.getElementById('cal-month-title');
   let container = document.getElementById('cal-month-days-container');
@@ -715,13 +718,16 @@ function renderWeekGanttCalendar(baseDate) {
 
   let dowNames = ['日', '月', '火', '水', '木', '金', '土'];
 
-  // 8時起点（8〜32時）の座標計算
   let getOffsetPercent = (timeStr) => {
     let h = timeToHours(timeStr);
     if (h < 8) h += 24;
     let adjusted = h - 8;
     return (adjusted / 24) * 100;
   };
+
+  // 曜日ごとの縦並びスクロールコンテナを構築
+  let scrollWrapper = document.createElement('div');
+  scrollWrapper.style.cssText = "max-height: 650px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafa;";
 
   for (let i = 0; i < 7; i++) {
     let curDate = new Date(startOfWeek);
@@ -737,79 +743,95 @@ function renderWeekGanttCalendar(baseDate) {
     let dateNumStyle = (dowNum === 0 || holidayName) ? 'color:#e53e3e;' : (dowNum === 6 ? 'color:#3182ce;' : '');
     let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag">${holidayName}</span>` : '';
 
-    let shiftsHtml = '';
-    let miniGanttHtml = '<div style="margin-top:8px; border-top:1px dashed #cbd5e0; padding-top:6px;"><div style="font-size:10px; color:gray; margin-bottom:2px;">ガント図イメージ:</div>';
-    let rowIdx = 0;
+    let dayBox = document.createElement('div');
+    dayBox.style.cssText = "background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);";
 
+    let headerHtml = `
+      <div style="border-bottom: 2px solid #edf2f7; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="${dateNumStyle} font-weight: bold; font-size: 14px;">${curDate.getMonth()+1}月${curDate.getDate()}日 (${dowNames[dowNum]})</span>
+        ${holidayTagHtml}
+      </div>
+    `;
+
+    let shiftsContentHtml = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+    let ganttRowsHtml = '<div style="margin-top: 10px; border-top: 1px dashed #cbd5e0; padding-top: 8px;"><div style="font-size: 11px; color: gray; font-weight: bold; margin-bottom: 4px;">ガントチャート図:</div>';
+
+    let rowIdx = 0;
     slotData.forEach(item => {
       for (let sIdx = 1; sIdx <= item.slots; sIdx++) {
         rowIdx++;
         let key = `${dateStr}_${rowIdx}`;
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
-        let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
+        let assignedVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
+        let currentMemo = calMemoAssignments[key] || '';
 
         let itemBg = 'background:#ffffff;';
         let badgeStyle = 'background:#ebf8ff; color:#2b6cb0;';
         let barColor = 'background:#2b6cb0;';
 
-        if (!currentVal || currentVal === '') {
+        if (!assignedVal || assignedVal === '') {
           itemBg = 'background:#fff5f5; border-left:3px solid #e53e3e;';
           badgeStyle = 'background:#fed7d7; color:#9b2c2c;';
           barColor = 'background:#e53e3e;';
-          currentVal = '未設定';
-        } else if (currentVal === '【ヘルプ募集中】') {
+          assignedVal = '未設定';
+        } else if (assignedVal === '【ヘルプ募集中】') {
           itemBg = 'background:#fffaf0; border-left:3px solid #dd6b20;';
           badgeStyle = 'background:#feebc8; color:#c05621;';
           barColor = 'background:#dd6b20;';
         } else {
           let req = offRequestsStore[key];
-          if (req && req.finalizedStaff && req.finalizedStaff === currentVal) {
+          if (req && req.finalizedStaff && req.finalizedStaff === assignedVal) {
             itemBg = 'background:#f0fff4; border-left:3px solid #38a169;';
             badgeStyle = 'background:#c6f6d5; color:#22543d;';
             barColor = 'background:#38a169;';
           }
         }
 
-        let staffOptHtml = `<select class="editable-input" style="font-size:11px; padding:2px; ${badgeStyle}" onchange="updateCalAssignment('${key}', this.value);">`;
-        staffOptHtml += '<option value="">--未設定--</option>';
-        staffList.forEach(st => {
-          let sel = (currentVal === st.name) ? 'selected' : '';
-          staffOptHtml += `<option value="${st.name}" ${sel}>${st.name}</option>`;
-        });
-        staffOptHtml += `<option value="【ヘルプ募集中】" ${currentVal === '【ヘルプ募集中】' ? 'selected' : ''}>🚨 【ヘルプ募集中】</option>`;
-        staffOptHtml += '</select>';
+        // ★修正: シフト割り当て（スタッフ名）は変更不可（固定表示）にし、突発メモ用のセレクトのみ変更可能にする
+        let memoSelectHtml = `
+          <select class="editable-input" style="font-size: 11px; padding: 2px; background: #fffaf0; color: #b7791f;" onchange="updateCalMemo('${key}', this.value)">
+            <option value="">-- 突発メモなし --</option>
+            <option value="突発休み" ${currentMemo === '突発休み' ? 'selected' : ''}>⚠️ 突発休み</option>
+            <option value="遅刻" ${currentMemo === '遅刻' ? 'selected' : ''}>⏳ 遅刻</option>
+            <option value="早退" ${currentMemo === '早退' ? 'selected' : ''}>🏃 早退</option>
+          </select>
+        `;
 
-        shiftsHtml += `<div class="cal-shift-item" style="margin-bottom:6px; padding:6px; border-radius:4px; box-shadow:0 1px 2px rgba(0,0,0,0.05); ${itemBg}">
-          <div style="font-size:11px; font-weight:bold; color:var(--text-main); margin-bottom:2px;">${item.name} (${item.start}-${item.end})</div>
-          <div>${staffOptHtml}</div>
-        </div>`;
+        shiftsContentHtml += `
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 4px; ${itemBg} border: 1px solid #e2e8f0;">
+            <div>
+              <span style="font-weight: bold; font-size: 12px;">${item.name} (${item.start}-${item.end})</span>
+              <span style="margin-left: 10px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; ${badgeStyle}">${assignedVal}</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              ${currentMemo ? `<span style="font-size:10px; background:#e53e3e; color:white; padding:1px 4px; border-radius:3px;">${currentMemo}</span>` : ''}
+              ${memoSelectHtml}
+            </div>
+          </div>
+        `;
 
-        // ミニガントチャートのバー（スタッフ名印字付き）
+        // ガントチャートのバー表示
         let startPct = getOffsetPercent(item.start);
         let widthPct = (calcDuration(item.start, item.end) / 24) * 100;
-        miniGanttHtml += `
-          <div style="font-size:9px; color:#4a5568; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-            ${item.name}:
-            <div style="display:inline-block; position:relative; width:100px; height:12px; background:#edf2f7; border-radius:2px; vertical-align:middle; margin-left:4px;">
-              <div style="position:absolute; left:${startPct}%; width:${widthPct}%; height:100%; ${barColor} color:white; font-size:8px; line-height:12px; text-align:center; border-radius:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${currentVal}">${currentVal}</div>
+        ganttRowsHtml += `
+          <div style="font-size: 10px; color: #4a5568; margin-bottom: 3px; display: flex; align-items: center; gap: 8px;">
+            <span style="width: 110px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name} (${assignedVal}${currentMemo ? `[${currentMemo}]` : ''}):</span>
+            <div style="flex-grow: 1; position: relative; height: 16px; background: #edf2f7; border-radius: 3px;">
+              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 9px; line-height: 16px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px;" title="${assignedVal}">${assignedVal}${currentMemo ? `(${currentMemo})` : ''}</div>
             </div>
           </div>
         `;
       }
     });
-    miniGanttHtml += '</div>';
 
-    let cell = document.createElement('div');
-    cell.className = 'cal-day-cell';
-    cell.style.minHeight = '320px';
-    cell.innerHTML = `
-      <div class="cal-day-header" style="border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
-        <span class="cal-date-num" style="${dateNumStyle} font-weight:bold;">${curDate.getMonth()+1}月${curDate.getDate()}日 (${dowNames[dowNum]})</span>
-        ${holidayTagHtml}
-      </div>
-    ` + shiftsHtml + miniGanttHtml;
-    container.appendChild(cell);
+    shiftsContentHtml += '</div>';
+    ganttRowsHtml += '</div>';
+
+    dayBox.innerHTML = headerHtml + shiftsContentHtml + ganttRowsHtml;
+    scrollWrapper.appendChild(dayBox);
   }
+
+  container.appendChild(scrollWrapper);
 }
 
 // 1か月テーブルマトリクス表示
@@ -854,18 +876,19 @@ function renderMonthTableCalendar(baseDate) {
         rowIdx++;
         let key = `${dateStr}_${rowIdx}`;
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
-        let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
+        let assignedVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
+        let currentMemo = calMemoAssignments[key] || '';
 
         let badgeBg = '#ebf8ff';
         let badgeColor = '#2b6cb0';
 
-        if (!currentVal) {
-          badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; currentVal = '未設定';
-        } else if (currentVal === '【ヘルプ募集中】') {
+        if (!assignedVal) {
+          badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; assignedVal = '未設定';
+        } else if (assignedVal === '【ヘルプ募集中】') {
           badgeBg = '#feebc8'; badgeColor = '#c05621';
         } else {
           let req = offRequestsStore[key];
-          if (req && req.finalizedStaff && req.finalizedStaff === currentVal) {
+          if (req && req.finalizedStaff && req.finalizedStaff === assignedVal) {
             badgeBg = '#c6f6d5'; badgeColor = '#22543d';
           }
         }
@@ -873,7 +896,7 @@ function renderMonthTableCalendar(baseDate) {
         tableRowsHtml += `
           <tr>
             <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px;">${item.name}</td>
-            <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px; background:${badgeBg}; color:${badgeColor}; font-weight:bold; text-align:center;">${currentVal}</td>
+            <td style="padding:2px 4px; border:1px solid #edf2f7; font-size:10px; background:${badgeBg}; color:${badgeColor}; font-weight:bold; text-align:center;" title="${currentMemo ? 'メモ:'+currentMemo : ''}">${assignedVal}${currentMemo ? '⚠️' : ''}</td>
           </tr>
         `;
       }
@@ -895,8 +918,12 @@ function renderMonthTableCalendar(baseDate) {
   }
 }
 
-function updateCalAssignment(key, val) {
-  calAssignments[key] = val;
+function updateCalMemo(key, val) {
+  if (val) {
+    calMemoAssignments[key] = val;
+  } else {
+    delete calMemoAssignments[key];
+  }
   renderCalendarTab();
   autoSave();
 }
