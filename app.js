@@ -2,6 +2,14 @@
 // フロントエンド制御ロジック (app.js - 最終完全版)
 // ==========================================
 
+// 【絶対安全ガード】空データや未ロード状態でのセーブを完全封鎖
+window.addEventListener('beforeunload', (event) => {
+  if (!isLoadedFromSheets) {
+    // まだ読み込みが終わっていないのに閉じようとした場合は警告
+    event.preventDefault();
+    event.returnValue = '';
+  }
+});
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
 
 let storeList = ['清川二丁目店', '博多住吉通り店'];
@@ -250,7 +258,10 @@ function autoSave() {
 }
 
 function silentSaveToSheets() {
-  if (!isLoadedFromSheets) return;
+  // ★重要：データがロードされていない、または枠データが空っぽの場合は絶対に送信しない
+  if (!isLoadedFromSheets || !slotData || slotData.length === 0) {
+    console.warn("⚠️ 未ロードまたは空データのため、保存を中止しました。");
+    return;}
   let mw = document.getElementById('min-wage');
   let nr = document.getElementById('night-rate');
 
@@ -281,6 +292,13 @@ function silentSaveToSheets() {
 function saveAllNow() {
   return new Promise((resolve) => {
     clearTimeout(autoSaveTimer);
+
+    // ★ここにもガードを追加
+    if (!isLoadedFromSheets || !slotData || slotData.length === 0) {
+      console.warn("⚠️ 未ロードまたは空データのため、保存を中止しました。");
+      resolve();
+      return;
+    }
     showLoading("データを保存しています...");
 
     let mw = document.getElementById('min-wage');
