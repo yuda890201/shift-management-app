@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 改善・完全版)
+// フロントエンド制御ロジック (app.js - 最終ブラッシュアップ版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -172,6 +172,7 @@ function loadAllFromSheets() {
         renderFixedShiftTable();
         renderOffInputTab();
         renderHelpTab();
+        renderCalendarTab();
       } else {
         console.error("データ取得エラー:", data.message);
       }
@@ -275,7 +276,10 @@ async function switchTab(tabId) {
   
   let targetTab = document.getElementById(tabId);
   if (targetTab) targetTab.classList.add('active');
-  if (event && event.currentTarget) event.currentTarget.classList.add('active');
+  
+  // 対応するボタンがあればactiveにする
+  let btn = document.querySelector(`button[onclick="switchTab('${tabId}')"]`);
+  if (btn) btn.classList.add('active');
 
   if (tabId === 'tab-calendar') {
     renderCalendarTab();
@@ -285,11 +289,13 @@ async function switchTab(tabId) {
     renderOffInputTab();
   } else if (tabId === 'tab-help') {
     renderHelpTab();
+  } else if (tabId === 'tab-slots') {
+    recalculateAll();
   }
 }
 
 // ==========================================
-// 各種画面描画ロジック
+// ① シフト枠設定 (追加・編集・削除機能)
 // ==========================================
 function recalculateAll() {
   const minWage = parseFloat(document.getElementById('min-wage')?.value) || 1057;
@@ -315,14 +321,17 @@ function recalculateAll() {
 
     let tr = document.createElement('tr');
     tr.innerHTML = `
-      <td><input type="text" class="editable-input" value="${item.name}" onchange="updateData(${index}, 'name', this.value)"></td>
-      <td><input type="text" class="editable-input" value="${item.start}" onchange="updateData(${index}, 'start', this.value)"></td>
-      <td><input type="text" class="editable-input" value="${item.end}" onchange="updateData(${index}, 'end', this.value)"></td>
+      <td><input type="text" class="editable-input" value="${item.name}" onchange="updateSlotData(${index}, 'name', this.value)"></td>
+      <td><input type="text" class="editable-input" value="${item.start}" onchange="updateSlotData(${index}, 'start', this.value)"></td>
+      <td><input type="text" class="editable-input" value="${item.end}" onchange="updateSlotData(${index}, 'end', this.value)"></td>
       <td><strong>${dur.toFixed(1)} h</strong></td>
-      <td><input type="number" class="editable-input" value="${item.slots}" min="0" max="5" onchange="updateData(${index}, 'slots', parseInt(this.value)||0)"></td>
+      <td><input type="number" class="editable-input" value="${item.slots}" min="0" max="5" onchange="updateSlotData(${index}, 'slots', parseInt(this.value)||0)"></td>
       <td><strong>${dailyHours.toFixed(1)} 時間</strong></td>
       <td>${(dailyHours*30).toFixed(1)} 時間</td>
-      <td><strong style="color:var(--primary);">¥${Math.round(dailyCost*30).toLocaleString()}</strong></td>
+      <td>
+        <strong style="color:var(--primary);">¥${Math.round(dailyCost*30).toLocaleString()}</strong>
+        <button class="btn btn-danger" style="padding:2px 6px; font-size:10px; margin-left:8px;" onclick="deleteSlotRow(${index})">削除</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -340,10 +349,24 @@ function recalculateAll() {
   renderGanttChart();
 }
 
-function updateData(index, field, value) {
+function updateSlotData(index, field, value) {
   slotData[index][field] = value;
   recalculateAll();
   autoSave();
+}
+
+function addSlotRow() {
+  slotData.push({ name: '新規シフト', start: '09:00', end: '18:00', slots: 1, colorClass: 'bg-morning' });
+  recalculateAll();
+  autoSave();
+}
+
+function deleteSlotRow(index) {
+  if (confirm('このシフト枠を削除しますか？')) {
+    slotData.splice(index, 1);
+    recalculateAll();
+    autoSave();
+  }
 }
 
 function renderGanttChart() {
@@ -362,6 +385,9 @@ function renderGanttChart() {
   });
 }
 
+// ==========================================
+// ② スタッフ管理
+// ==========================================
 function renderStaffTable() {
   let tbody = document.getElementById('staff-table-body');
   if (!tbody) return;
@@ -413,7 +439,9 @@ function addStaffRow() {
   autoSave();
 }
 
-// --- ③ 固定シフト表 ---
+// ==========================================
+// ③ 固定シフト表 (希望曜日カウント修正版)
+// ==========================================
 function renderFixedShiftTable() {
   let tbody = document.getElementById('fixed-table-body');
   if (!tbody) return;
@@ -434,9 +462,17 @@ function renderFixedShiftTable() {
         staffOptHtml += '<option value="">-- 未設定 --</option>';
 
         staffList.forEach(s => {
+          // 曜日インデックス（0:月〜6:日）に対応する文字
+          let dowCharMap = ['月', '火', '水', '木', '金', '土', '日'];
+          let targetDow = dowCharMap[dayIdx];
+          let isAvailable = (s.days && s.days.includes(targetDow));
+
+          // 希望に合致するスタッフのみ、または全体の中から希望曜日を明確にして表示
           let daysText = (s.days && s.days.length > 0) ? s.days.join('') : '希望なし';
           let timeText = s.time || '全時間帯';
-          let label = `${s.name} (希望:${daysText} / ${timeText})`;
+          
+          // 希望曜日に一致しない場合は少し薄く表示するなどの工夫も可能
+          let label = `${s.name} (希望:${daysText}${isAvailable ? ' ★出勤可' : ''})`;
           let sel = (assignedVal === s.name) ? 'selected' : '';
           staffOptHtml += `<option value="${s.name}" ${sel}>${label}</option>`;
         });
@@ -492,14 +528,16 @@ function updateSidebarStats() {
       </div>
       <div style="color:var(--text-muted); display:flex; justify-content:space-between;">
         <span>固定シフト: <strong>${stat.slotsCount} 枠</strong></span>
-        <span>(希望: ${(s.days||[]).join('') || 'なし'})</span>
+        <span>(希望曜日: ${(s.days||[]).join('') || 'なし'})</span>
       </div>
     `;
     sidebarContainer.appendChild(card);
   });
 }
 
-// --- ④ 暦シフト表 ---
+// ==========================================
+// ④ 暦シフト表 (1週間表示モードデフォルト ＆ 色分け反映)
+// ==========================================
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
   if (!picker) return;
@@ -532,7 +570,15 @@ function renderCalendarTab() {
   let baseInput = document.getElementById('cal-base-date');
   if (!baseInput) return;
   let baseDate = new Date(baseInput.value || Date.now());
-  renderMonthCalendar(baseDate);
+  
+  let modeSelect = document.getElementById('cal-mode-select');
+  let mode = modeSelect ? modeSelect.value : 'week'; // デフォルトは1週間表示
+
+  if (mode === 'week') {
+    renderWeekCalendar(baseDate);
+  } else {
+    renderMonthCalendar(baseDate);
+  }
 }
 
 function getFixedAssignmentFallback(curDate, rowIdx) {
@@ -540,6 +586,89 @@ function getFixedAssignmentFallback(curDate, rowIdx) {
   let fixedDayIdx = (dow === 0) ? 6 : dow - 1;
   let key = `${rowIdx}_${fixedDayIdx}`;
   return fixedAssignments[key] || '';
+}
+
+function renderWeekCalendar(baseDate) {
+  let titleEl = document.getElementById('cal-month-title');
+  let container = document.getElementById('cal-month-days-container');
+  if (!container) return;
+  container.innerHTML = '';
+
+  // 週の始まり（日曜日または月曜日。ここでは日曜日起点）を計算
+  let currentDay = new Date(baseDate);
+  let dow = currentDay.getDay();
+  let startOfWeek = new Date(currentDay);
+  startOfWeek.setDate(currentDay.getDate() - dow);
+
+  if (titleEl) {
+    let startYMD = `${startOfWeek.getFullYear()}年${startOfWeek.getMonth()+1}月${startOfWeek.getDate()}日`;
+    let endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    let endYMD = `${endOfWeek.getMonth()+1}月${endOfWeek.getDate()}日`;
+    titleEl.innerText = `📅 1週間表示 (${startYMD} 〜 ${endYMD})`;
+  }
+
+  // 1週間（7日間）分のグリッドを描画
+  for (let i = 0; i < 7; i++) {
+    let curDate = new Date(startOfWeek);
+    curDate.setDate(startOfWeek.getDate() + i);
+
+    let yyyy = curDate.getFullYear();
+    let mm = String(curDate.getMonth() + 1).padStart(2, '0');
+    let dd = String(curDate.getDate()).padStart(2, '0');
+    let dateStr = `${yyyy}-${mm}-${dd}`;
+
+    let holidayName = getHolidayName(curDate);
+    let dowNum = curDate.getDay();
+    let dowNames = ['日', '月', '火', '水', '木', '金', '土'];
+
+    let dateNumStyle = '';
+    if (dowNum === 0 || holidayName) dateNumStyle = 'color:#e53e3e;';
+    else if (dowNum === 6) dateNumStyle = 'color:#3182ce;';
+
+    let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag">${holidayName}</span>` : '';
+    let shiftsHtml = '';
+    let rowIdx = 0;
+
+    slotData.forEach(item => {
+      for (let sIdx = 1; sIdx <= item.slots; sIdx++) {
+        rowIdx++;
+        let key = `${dateStr}_${rowIdx}`;
+        let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
+        let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
+
+        // 色分け判定（ヘルプ中ならオレンジ、休み希望ならグレー等）
+        let itemBg = '';
+        if (currentVal === '【ヘルプ募集中】') {
+          itemBg = 'background:#fffaf0; border-left:3px solid #dd6b20;';
+        } else if (offRequestsStore[key]) {
+          itemBg = 'background:#f7fafc; opacity:0.6;';
+        }
+
+        let staffOptHtml = `<select class="editable-input" style="font-size:11px; padding:2px;" onchange="updateCalAssignment('${key}', this.value);">`;
+        staffOptHtml += '<option value="">--未設定--</option>';
+        staffList.forEach(st => {
+          let sel = (currentVal === st.name) ? 'selected' : '';
+          staffOptHtml += `<option value="${st.name}" ${sel}>${st.name}</option>`;
+        });
+        staffOptHtml += `<option value="【ヘルプ募集中】" ${currentVal === '【ヘルプ募集中】' ? 'selected' : ''}>🚨 【ヘルプ募集中】</option>`;
+        staffOptHtml += '</select>';
+
+        shiftsHtml += `<div class="cal-shift-item" style="margin-bottom:6px; padding:4px; border-radius:4px; ${itemBg}"><strong>${item.name}${sIdx > 1 ? sIdx : ''}</strong>: ${staffOptHtml}</div>`;
+      }
+    });
+
+    let cell = document.createElement('div');
+    cell.className = 'cal-day-cell';
+    cell.style.minHeight = '220px';
+    cell.innerHTML = `
+      <div class="cal-day-header" style="border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:6px;">
+        <span class="cal-date-num" style="${dateNumStyle} font-weight:bold;">${monthName = (curDate.getMonth()+1) + '月' + curDate.getDate() + '日'} (${dowNames[dowNum]})</span>
+        ${holidayTagHtml}
+      </div>
+    ` + shiftsHtml;
+    container.appendChild(cell);
+  }
 }
 
 function renderMonthCalendar(baseDate) {
@@ -588,15 +717,23 @@ function renderMonthCalendar(baseDate) {
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
         let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
 
+        let itemBg = '';
+        if (currentVal === '【ヘルプ募集中】') {
+          itemBg = 'background:#fffaf0; border-left:3px solid #dd6b20;';
+        } else if (offRequestsStore[key]) {
+          itemBg = 'background:#f7fafc; opacity:0.6;';
+        }
+
         let staffOptHtml = `<select class="editable-input" style="font-size:10px; padding:1px 2px;" onchange="updateCalAssignment('${key}', this.value);">`;
         staffOptHtml += '<option value="">--未設定--</option>';
         staffList.forEach(st => {
           let sel = (currentVal === st.name) ? 'selected' : '';
           staffOptHtml += `<option value="${st.name}" ${sel}>${st.name}</option>`;
         });
+        staffOptHtml += '<option value="【ヘルプ募集中】">🚨 【ヘルプ募集中】</option>';
         staffOptHtml += '</select>';
 
-        shiftsHtml += `<div class="cal-shift-item"><strong>${item.name}${sIdx > 1 ? sIdx : ''}</strong>: ${staffOptHtml}</div>`;
+        shiftsHtml += `<div class="cal-shift-item" style="${itemBg}"><strong>${item.name}${sIdx > 1 ? sIdx : ''}</strong>: ${staffOptHtml}</div>`;
       }
     });
 
@@ -642,7 +779,7 @@ function applyFixedToCal() {
 }
 
 // ==========================================
-// ⑤ 休み実績・希望休入力ロジック (今日から30日間・常時表示対応)
+// ⑤ 休み実績・希望休入力ロジック
 // ==========================================
 function renderOffInputTab() {
   let selectEl = document.getElementById('off-staff-select');
@@ -660,8 +797,6 @@ function renderOffInputTab() {
   });
 
   let selectedStaff = selectEl.value || (staffList[0] ? staffList[0].name : '');
-  
-  // 常に「今日」を起点として今後30日間を対象にする
   let today = new Date();
   today.setHours(0,0,0,0);
 
@@ -829,7 +964,7 @@ function updateOffReason(key, reasonVal) {
 }
 
 // ==========================================
-// ⑥ ヘルプ募集・管理機能 (候補者横並び・自分自身も応募可能対応)
+// ⑥ ヘルプ募集・管理機能
 // ==========================================
 function renderHelpTab() {
   let urgentTbody = document.getElementById('help-urgent-tbody');
@@ -845,11 +980,8 @@ function renderHelpTab() {
     let req = offRequestsStore[key];
     let tr = document.createElement('tr');
 
-    // ★修正案: スタッフのチェックボックスを縦ではなく「横並び（flex）」にして余白をスッキリさせる
     let candHtml = '<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">';
     staffList.forEach(s => {
-      // 以前は `s.name !== req.staffName` で本人の除外をしていましたが、
-      // ご要望により「自分自身も応募可能にする」ため全員を対象にリストアップします
       let isCand = req.candidates && req.candidates[s.name];
       let checked = isCand ? 'checked' : '';
       let tsText = isCand ? `<span class="candidate-timestamp" style="font-size:10px; color:gray;">(${req.candidates[s.name]})</span>` : '';
