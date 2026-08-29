@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 究極ブラッシュアップ版)
+// フロントエンド制御ロジック (app.js - 最終完全版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -349,7 +349,7 @@ async function switchTab(tabId) {
 }
 
 // ==========================================
-// ① シフト枠設定 (並び替え・削除制御・選択式時間・6時スタート)
+// ① シフト枠設定 (8時〜32時起点ガント・余子小・並び替え)
 // ==========================================
 function recalculateAll() {
   const minWage = parseFloat(document.getElementById('min-wage')?.value) || 1057;
@@ -387,13 +387,11 @@ function recalculateAll() {
     });
     endSelectHtml += `</select>`;
 
-    // 並び替えボタン（上へ・下へ）
     let moveButtons = `
       <button class="btn" style="padding:1px 5px; font-size:10px; margin-right:2px;" ${index === 0 ? 'disabled' : ''} onclick="moveSlot(${index}, -1)">▲</button>
       <button class="btn" style="padding:1px 5px; font-size:10px;" ${index === slotData.length - 1 ? 'disabled' : ''} onclick="moveSlot(${index}, 1)">▼</button>
     `;
 
-    // 削除ボタンは初期の5件を超えた「新規追加した枠」のみ表示
     let deleteButton = '';
     if (index >= 5) {
       deleteButton = `<button class="btn btn-danger" style="padding:2px 6px; font-size:10px; margin-left:6px;" onclick="deleteSlotRow(${index})">削除</button>`;
@@ -463,16 +461,17 @@ function moveSlot(index, direction) {
   autoSave();
 }
 
-// ガントチャート（6時スタート）
+// 枠設定画面のガントチャート（8時〜32時起点・余白最小化）
 function renderGanttChart() {
   let container = document.getElementById('gantt-chart-container');
   if (!container) return;
   container.innerHTML = '';
 
+  // 8時 = 0%、32時（翌8時）= 100% (総計24時間)
   let getOffsetPercent = (timeStr) => {
     let h = timeToHours(timeStr);
-    let adjusted = h - 6;
-    if (adjusted < 0) adjusted += 24;
+    if (h < 8) h += 24; // 8時未満（深夜早朝）は翌日扱いとして加算
+    let adjusted = h - 8;
     return (adjusted / 24) * 100;
   };
 
@@ -484,10 +483,11 @@ function renderGanttChart() {
     for (let i = 1; i <= item.slots; i++) {
       let row = document.createElement('div');
       row.className = 'gantt-row';
+      row.style.margin = '2px 0'; // 余白を小さく調整
       row.innerHTML = `
-        <div class="gantt-label">${item.name} 枠${i}</div>
-        <div class="gantt-timeline" style="position:relative;">
-          <div class="gantt-bar-wrapper ${item.colorClass}" style="left:${startPct}%; width:${widthPct}%;">${item.start}-${item.end}</div>
+        <div class="gantt-label" style="font-size:11px;">${item.name} 枠${i}</div>
+        <div class="gantt-timeline" style="position:relative; height:20px;">
+          <div class="gantt-bar-wrapper ${item.colorClass}" style="left:${startPct}%; width:${widthPct}%; font-size:10px; padding:1px 4px;">${item.start}-${item.end}</div>
         </div>
       `;
       container.appendChild(row);
@@ -550,7 +550,7 @@ function addStaffRow() {
 }
 
 // ==========================================
-// ③ 固定シフト表
+// ③ 固定シフト表 (希望曜日カウント修正版)
 // ==========================================
 function renderFixedShiftTable() {
   let tbody = document.getElementById('fixed-table-body');
@@ -641,7 +641,7 @@ function updateSidebarStats() {
 }
 
 // ==========================================
-// ④ 暦シフト表 (1週間ガント・1か月テーブルマトリクス・色分け・印刷)
+// ④ 暦シフト表 (1週間ガント＆スタッフ名印字、1か月テーブルマトリクス)
 // ==========================================
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
@@ -693,7 +693,7 @@ function getFixedAssignmentFallback(curDate, rowIdx) {
   return fixedAssignments[key] || '';
 }
 
-// 1週間ガントチャート表示
+// 1週間ガントチャート表示 ＆ 下部ミニガントチャート図（スタッフ名印字）併記
 function renderWeekGanttCalendar(baseDate) {
   let titleEl = document.getElementById('cal-month-title');
   let container = document.getElementById('cal-month-days-container');
@@ -715,6 +715,14 @@ function renderWeekGanttCalendar(baseDate) {
 
   let dowNames = ['日', '月', '火', '水', '木', '金', '土'];
 
+  // 8時起点（8〜32時）の座標計算
+  let getOffsetPercent = (timeStr) => {
+    let h = timeToHours(timeStr);
+    if (h < 8) h += 24;
+    let adjusted = h - 8;
+    return (adjusted / 24) * 100;
+  };
+
   for (let i = 0; i < 7; i++) {
     let curDate = new Date(startOfWeek);
     curDate.setDate(startOfWeek.getDate() + i);
@@ -730,6 +738,7 @@ function renderWeekGanttCalendar(baseDate) {
     let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag">${holidayName}</span>` : '';
 
     let shiftsHtml = '';
+    let miniGanttHtml = '<div style="margin-top:8px; border-top:1px dashed #cbd5e0; padding-top:6px;"><div style="font-size:10px; color:gray; margin-bottom:2px;">ガント図イメージ:</div>';
     let rowIdx = 0;
 
     slotData.forEach(item => {
@@ -739,22 +748,25 @@ function renderWeekGanttCalendar(baseDate) {
         let defaultVal = getFixedAssignmentFallback(curDate, rowIdx);
         let currentVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
 
-        // 色分けハイライトロジック
         let itemBg = 'background:#ffffff;';
         let badgeStyle = 'background:#ebf8ff; color:#2b6cb0;';
+        let barColor = 'background:#2b6cb0;';
 
         if (!currentVal || currentVal === '') {
-          itemBg = 'background:#fff5f5; border-left:3px solid #e53e3e;'; // 未設定：赤系
+          itemBg = 'background:#fff5f5; border-left:3px solid #e53e3e;';
           badgeStyle = 'background:#fed7d7; color:#9b2c2c;';
+          barColor = 'background:#e53e3e;';
+          currentVal = '未設定';
         } else if (currentVal === '【ヘルプ募集中】') {
-          itemBg = 'background:#fffaf0; border-left:3px solid #dd6b20;'; // ヘルプ募集：オレンジ系
+          itemBg = 'background:#fffaf0; border-left:3px solid #dd6b20;';
           badgeStyle = 'background:#feebc8; color:#c05621;';
+          barColor = 'background:#dd6b20;';
         } else {
-          // ヘルプで決まった枠（または通常確定枠で、固定から変更された場合など）
           let req = offRequestsStore[key];
           if (req && req.finalizedStaff && req.finalizedStaff === currentVal) {
-            itemBg = 'background:#f0fff4; border-left:3px solid #38a169;'; // ヘルプ決定：緑系
+            itemBg = 'background:#f0fff4; border-left:3px solid #38a169;';
             badgeStyle = 'background:#c6f6d5; color:#22543d;';
+            barColor = 'background:#38a169;';
           }
         }
 
@@ -771,18 +783,31 @@ function renderWeekGanttCalendar(baseDate) {
           <div style="font-size:11px; font-weight:bold; color:var(--text-main); margin-bottom:2px;">${item.name} (${item.start}-${item.end})</div>
           <div>${staffOptHtml}</div>
         </div>`;
+
+        // ミニガントチャートのバー（スタッフ名印字付き）
+        let startPct = getOffsetPercent(item.start);
+        let widthPct = (calcDuration(item.start, item.end) / 24) * 100;
+        miniGanttHtml += `
+          <div style="font-size:9px; color:#4a5568; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            ${item.name}:
+            <div style="display:inline-block; position:relative; width:100px; height:12px; background:#edf2f7; border-radius:2px; vertical-align:middle; margin-left:4px;">
+              <div style="position:absolute; left:${startPct}%; width:${widthPct}%; height:100%; ${barColor} color:white; font-size:8px; line-height:12px; text-align:center; border-radius:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${currentVal}">${currentVal}</div>
+            </div>
+          </div>
+        `;
       }
     });
+    miniGanttHtml += '</div>';
 
     let cell = document.createElement('div');
     cell.className = 'cal-day-cell';
-    cell.style.minHeight = '280px';
+    cell.style.minHeight = '320px';
     cell.innerHTML = `
       <div class="cal-day-header" style="border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
         <span class="cal-date-num" style="${dateNumStyle} font-weight:bold;">${curDate.getMonth()+1}月${curDate.getDate()}日 (${dowNames[dowNum]})</span>
         ${holidayTagHtml}
       </div>
-    ` + shiftsHtml;
+    ` + shiftsHtml + miniGanttHtml;
     container.appendChild(cell);
   }
 }
@@ -841,7 +866,7 @@ function renderMonthTableCalendar(baseDate) {
         } else {
           let req = offRequestsStore[key];
           if (req && req.finalizedStaff && req.finalizedStaff === currentVal) {
-            badgeBg = '#c6f6d5'; badgeColor = '#22543d'; // ヘルプ決定枠の色分け
+            badgeBg = '#c6f6d5'; badgeColor = '#22543d';
           }
         }
 
@@ -1227,7 +1252,6 @@ window.addEventListener('DOMContentLoaded', () => {
   renderOffInputTab();
   renderHelpTab();
   
-  // アプリ起動時に「暦シフト表」が最初に開くように制御
   setTimeout(() => {
     switchTab('tab-calendar');
   }, 100);
