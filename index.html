@@ -6,8 +6,8 @@
 <title>シフト管理アプリ</title>
 
   <!-- PWAメタタグ・アイコン -->
-<link rel="apple-touch-icon" href="shift_manage.png">
-  <link rel="icon" type="image/png"shift_manage.png">
+  <link rel="apple-touch-icon" href="shift_manage.png">
+  <link rel="icon" type="image/png" href="shift_manage.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="シフト管理">
@@ -20,7 +20,8 @@
 <body>
 
   <nav class="navbar no-print">
-<div class="nav-tabs" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+    <div class="nav-brand">🏪 シフト管理アプリ</div>
+    <div class="nav-tabs" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
       <!-- メイン現場用タブ -->
       <div style="display: flex; gap: 4px;">
         <button class="tab-btn active" onclick="switchTab('tab-calendar')">📅 暦シフト (1週間)</button>
@@ -38,8 +39,6 @@
   </nav>
 
   <div class="container">
-
-  
 
     <!-- ① シフト枠設定画面 -->
     <div id="tab-slots" class="tab-content">
@@ -78,25 +77,25 @@
           <div class="kpi-num" id="kpi-total-slots">0 枠 / 日</div>
           <div class="kpi-sub">固定シフト表の枠に連動します</div>
         </div>
-        <div style="margin-top:12px; padding:10px; background:#f7fafc; border-radius:6px; display:flex; align-items:center; gap:10px; font-size:13px;">
-  <span>💡 指定曜日間の人件費試算:</span>
-  <select id="range-day-1" onchange="recalculateAll()" class="editable-input" style="width:60px;"><option value="月">月</option><option value="日">日</option></select>
-  <span>〜</span>
-  <select id="range-day-2" onchange="recalculateAll()" class="editable-input" style="width:60px;"><option value="金" selected>金</option><option value="土">土</option></select>
-  <strong id="custom-range-cost" style="color:var(--primary); font-size:14px;">¥0</strong>
-</div>
+        <div style="margin-top:12px; padding:10px; background:#f7fafc; border-radius:6px; display:flex; align-items:center; gap:10px; font-size:13px; width:100%; box-sizing:border-box;">
+          <span>💡 指定曜日間の人件費試算:</span>
+          <select id="range-day-1" onchange="recalculateAll()" class="editable-input" style="width:60px;"><option value="月">月</option><option value="日">日</option></select>
+          <span>〜</span>
+          <select id="range-day-2" onchange="recalculateAll()" class="editable-input" style="width:60px;"><option value="金" selected>金</option><option value="土">土</option></select>
+          <strong id="custom-range-cost" style="color:var(--primary); font-size:14px;">¥0</strong>
+        </div>
       </div>
 
       <div class="table-responsive"><table>
         <thead>
           <tr>
+            <th style="width:70px;">並び替え</th>
             <th style="width:140px;">区分名</th>
             <th style="width:110px;">開始時間</th>
             <th style="width:110px;">終了時間</th>
             <th style="width:80px;">1枠時間</th>
             <th style="width:90px;">必要枠数</th>
             <th style="width:120px;">日あたり総時間</th>
-            <th style="width:130px;">月間総時間 (30日)</th>
             <th>月間概算人件費 (最低賃金ベース)</th>
           </tr>
         </thead>
@@ -104,11 +103,11 @@
       </table></div>
 
       <div class="gantt-section">
-        <h3>📊 シフト枠 24時間ガントチャート</h3>
-<div class="gantt-header-row" style="font-size:11px; display:flex; justify-content:space-between; padding:0 4px; color:gray;">
-  <div>08</div><div>10</div><div>12</div><div>14</div><div>16</div><div>18</div>
-  <div>20</div><div>22</div><div>00</div><div>02</div><div>04</div><div>06</div>
-</div>
+        <h3>📊 シフト枠 24時間ガントチャート (08:00起点)</h3>
+        <div class="gantt-header-row" style="font-size:11px; display:flex; justify-content:space-between; padding:0 4px; color:gray;">
+          <div>08</div><div>10</div><div>12</div><div>14</div><div>16</div><div>18</div>
+          <div>20</div><div>22</div><div>00</div><div>02</div><div>04</div><div>06</div>
+        </div>
         <div id="gantt-chart-container"></div>
       </div>
     </div>
@@ -139,7 +138,7 @@
     <div id="tab-fixed" class="tab-content">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <h2>基本週間固定シフト表</h2>
-        <button class="btn btn-success" onclick="triggerPrint('fixed')">🖨️ 固定シフト表＆ガントチャートを印刷</button>
+        <button class="btn btn-success" onclick="triggerPrint()">🖨️ 固定シフト表を印刷</button>
       </div>
       <div class="fixed-shift-layout">
         <div>
@@ -162,14 +161,14 @@
     </div>
 
     <!-- ④ 暦シフト表画面 -->
-    <div id="tab-calendar" class="tab-content active"> <!-- activeをこちらに -->
+    <div id="tab-calendar" class="tab-content active">
       <h2>暦シフト表</h2>
       <div class="controls-row no-print">
         <label>表示基準日: <input type="date" id="cal-base-date" value="2026-08-01" onchange="renderCalendarTab(); autoSave();"></label>
         <label>表示モード: 
           <select id="cal-mode-select" onchange="renderCalendarTab()">
+            <option value="week" selected>1週間表示</option>
             <option value="month">1か月表示</option>
-            <option value="week">1週間表示</option>
           </select>
         </label>
         <select id="cal-month-picker" onchange="onMonthPickerChange()"></select>
@@ -178,58 +177,63 @@
       </div>
       <div id="cal-month-view">
         <div id="cal-month-title" style="font-weight:bold; font-size:15px; color:var(--primary); margin-bottom:10px;"></div>
-
-        <div class="cal-grid" id="cal-month-days-container" style="margin-top:6px;"></div>
+        <div id="cal-month-days-container" style="margin-top:6px;"></div>
       </div>
     </div>
 
-<!-- ⑤ 休み実績入力タブの想定構造 -->
-<div id="tab-off-input" class="tab-content">
-  <h2>休み実績・申請一覧</h2>
-  <select id="off-staff-select" onchange="renderOffInputTab()"></select>
-  <input type="date" id="off-base-date" value="2026-08-01" onchange="renderOffInputTab()">
-  
-  <!-- 緊急休みテーブル -->
-  <table>
-    <tbody id="off-urgent-tbody"></tbody>
-  </table>
-  
-  <!-- 通常休み希望テーブル -->
-  <table>
-    <tbody id="off-normal-tbody"></tbody>
-  </table>
+    <!-- ⑤ 休み実績入力タブ -->
+    <div id="tab-off-input" class="tab-content">
+      <h2>休み実績・申請一覧</h2>
+      <div class="controls-row">
+        <label>スタッフ: <select id="off-staff-select" class="editable-input" onchange="renderOffInputTab()"></select></label>
+      </div>
+      
+      <h3>🚨 直近15日以内の勤務予定 (緊急休み対象)</h3>
+      <table>
+        <thead><tr><th>日付</th><th>曜日</th><th>シフト枠</th><th>申請</th><th>フリーコメント欄</th></tr></thead>
+        <tbody id="off-urgent-tbody"></tbody>
+      </table>
+      
+      <h3 style="margin-top:20px;">📅 16日〜30日後の勤務予定 (通常休み希望)</h3>
+      <table>
+        <thead><tr><th>日付</th><th>曜日</th><th>シフト枠</th><th>申請</th><th>フリーコメント欄</th></tr></thead>
+        <tbody id="off-normal-tbody"></tbody>
+      </table>
 
-  <!-- サマリーテーブル -->
-<table>
-  <thead>
-    <tr>
-      <th>社員No</th>
-      <th>スタッフ名</th>
-      <th>所定日数</th>
-      <th>緊急休み</th>
-      <th>希望休み</th>
-      <th>実働日数</th>
-      <th>緊急休み率</th>
-      <th>出勤率</th>
-      <th>調整優先度</th>
-    </tr>
-  </thead>
-  <tbody id="off-summary-tbody"></tbody>
-</table>
-  <span id="off-summary-store-name"></span>
-  <span id="off-summary-base-date"></span>
-</div>
+      <h3 style="margin-top:24px;">📊 出勤率・調整優先度サマリー (<span id="off-summary-store-name"></span> / 基準日: <span id="off-summary-base-date"></span>)</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>社員No</th>
+            <th>スタッフ名</th>
+            <th>所定日数</th>
+            <th>緊急休み</th>
+            <th>希望休み</th>
+            <th>実働日数</th>
+            <th>緊急休み率</th>
+            <th>出勤率</th>
+            <th>調整優先度</th>
+          </tr>
+        </thead>
+        <tbody id="off-summary-tbody"></tbody>
+      </table>
+    </div>
 
-<!-- ⑥ ヘルプ募集タブの想定構造 -->
-<div id="tab-help" class="tab-content">
-  <h2>ヘルプ募集・管理</h2>
-  <table>
-    <tbody id="help-urgent-tbody"></tbody>
-  </table>
-  <table>
-    <tbody id="help-normal-tbody"></tbody>
-  </table>
-</div>
+    <!-- ⑥ ヘルプ募集タブ -->
+    <div id="tab-help" class="tab-content">
+      <h2>ヘルプ募集・管理</h2>
+      <h3>🚨 緊急ヘルプ募集一覧 (15日未満)</h3>
+      <table>
+        <thead><tr><th>登録日</th><th>対象日</th><th>休止スタッフ</th><th>シフト枠 / コメント</th><th>候補者立候補</th><th>責任者決定</th></tr></thead>
+        <tbody id="help-urgent-tbody"></tbody>
+      </table>
+
+      <h3 style="margin-top:20px;">📌 通常ヘルプ募集一覧 (15日以上先)</h3>
+      <table>
+        <thead><tr><th>登録日</th><th>対象日</th><th>休止スタッフ</th><th>シフト枠 / コメント</th><th>候補者立候補</th><th>責任者決定</th></tr></thead>
+        <tbody id="help-normal-tbody"></tbody>
+      </table>
+    </div>
 
   </div>
 
