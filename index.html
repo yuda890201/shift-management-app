@@ -42,7 +42,7 @@
   
 
     <!-- ① シフト枠設定画面 -->
-    <div id="tab-slots" class="tab-content active">
+    <div id="tab-slots" class="tab-content">
       <h2>基本シフト枠設定・人件費リアルタイム算定</h2>
 
       <div class="controls-row">
@@ -166,7 +166,7 @@
     </div>
 
     <!-- ④ 暦シフト表画面 -->
-    <div id="tab-calendar" class="tab-content">
+    <div id="tab-calendar" class="tab-content active"> <!-- activeをこちらに -->
       <h2>暦シフト表</h2>
       <div class="controls-row no-print">
         <label>表示基準日: <input type="date" id="cal-base-date" value="2026-08-01" onchange="renderCalendarTab(); autoSave();"></label>
@@ -175,6 +175,7 @@
             <option value="month">1か月表示</option>
             <option value="week">1週間表示</option>
           </select>
+          <button class="btn btn-success" onclick="triggerPrint()">🖨️ 暦シフトを印刷</button>
         </label>
         <select id="cal-month-picker" onchange="onMonthPickerChange()"></select>
         <button class="btn" onclick="applyFixedToCal()">③の固定シフトを自動反映</button>
