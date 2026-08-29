@@ -680,24 +680,26 @@ function renderCalendarTab() {
   let modeSelect = document.getElementById('cal-mode-select');
   let mode = modeSelect ? modeSelect.value : 'week';
 
-  if (!baseInput.value) {
+  // ★修正: 未設定の場合は強制的に「今日」の年月日を自動取得してセットする
+  if (!baseInput || !baseInput.value) {
     let now = new Date();
     let yyyy = now.getFullYear();
     let mm = String(now.getMonth() + 1).padStart(2, '0');
     let dd = String(now.getDate()).padStart(2, '0');
-    baseInput.value = `${yyyy}-${mm}-${dd}`;
+    if (baseInput) {
+      baseInput.value = `${yyyy}-${mm}-${dd}`;
+    }
   }
 
   let baseDate = new Date(baseInput.value);
   let container = document.getElementById('cal-month-days-container');
   if (!container) return;
 
-  // 1週間表示と1か月表示でコンテナのレイアウト（クラス名やスタイル）を完全に独立させる
   if (mode === 'week') {
-    container.className = ""; // グリッドを解除
+    container.className = ""; 
     renderWeekGanttCalendar(baseDate);
   } else {
-    container.className = "cal-grid"; // 通常のカレンダーグリッドに戻す
+    container.className = "cal-grid"; 
     renderMonthTableCalendar(baseDate);
   }
 }
