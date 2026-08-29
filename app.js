@@ -712,6 +712,7 @@ function getFixedAssignmentFallback(curDate, rowIdx) {
 }
 
 // 1週間ガントチャート表示 ＆ 下部ミニガントチャート（曜日ごと縦並びスクロール）
+// 1週間ガントチャート表示（曜日ごと縦並び・ガント図画面幅100%対応）
 function renderWeekGanttCalendar(baseDate) {
   let titleEl = document.getElementById('cal-month-title');
   let container = document.getElementById('cal-month-days-container');
@@ -740,9 +741,9 @@ function renderWeekGanttCalendar(baseDate) {
     return (adjusted / 24) * 100;
   };
 
-  // 曜日ごとの縦並びスクロールコンテナを構築
+  // 曜日ごとの縦並びスクロールコンテナ（画面幅いっぱい）
   let scrollWrapper = document.createElement('div');
-  scrollWrapper.style.cssText = "max-height: 650px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #fafafa;";
+  scrollWrapper.style.cssText = "width: 100%; max-height: 700px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; background: #fafafa; box-sizing: border-box;";
 
   for (let i = 0; i < 7; i++) {
     let curDate = new Date(startOfWeek);
@@ -759,17 +760,18 @@ function renderWeekGanttCalendar(baseDate) {
     let holidayTagHtml = holidayName ? `<span class="cal-holiday-tag">${holidayName}</span>` : '';
 
     let dayBox = document.createElement('div');
-    dayBox.style.cssText = "background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);";
+    dayBox.style.cssText = "width: 100%; background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); box-sizing: border-box;";
 
     let headerHtml = `
-      <div style="border-bottom: 2px solid #edf2f7; padding-bottom: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="${dateNumStyle} font-weight: bold; font-size: 14px;">${curDate.getMonth()+1}月${curDate.getDate()}日 (${dowNames[dowNum]})</span>
+      <div style="border-bottom: 2px solid #edf2f7; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="${dateNumStyle} font-weight: bold; font-size: 15px;">${curDate.getMonth()+1}月${curDate.getDate()}日 (${dowNames[dowNum]})</span>
         ${holidayTagHtml}
       </div>
     `;
 
     let shiftsContentHtml = '<div style="display: flex; flex-direction: column; gap: 8px;">';
-    let ganttRowsHtml = '<div style="margin-top: 10px; border-top: 1px dashed #cbd5e0; padding-top: 8px;"><div style="font-size: 11px; color: gray; font-weight: bold; margin-bottom: 4px;">ガントチャート図:</div>';
+    // 下部ガントチャート図（幅100%展開）
+    let ganttRowsHtml = '<div style="margin-top: 12px; border-top: 1px dashed #cbd5e0; padding-top: 10px; width: 100%;"><div style="font-size: 11px; color: gray; font-weight: bold; margin-bottom: 6px;">ガントチャート図:</div>';
 
     let rowIdx = 0;
     slotData.forEach(item => {
@@ -802,7 +804,6 @@ function renderWeekGanttCalendar(baseDate) {
           }
         }
 
-        // ★修正: シフト割り当て（スタッフ名）は変更不可（固定表示）にし、突発メモ用のセレクトのみ変更可能にする
         let memoSelectHtml = `
           <select class="editable-input" style="font-size: 11px; padding: 2px; background: #fffaf0; color: #b7791f;" onchange="updateCalMemo('${key}', this.value)">
             <option value="">-- 突発メモなし --</option>
@@ -813,26 +814,26 @@ function renderWeekGanttCalendar(baseDate) {
         `;
 
         shiftsContentHtml += `
-          <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 4px; ${itemBg} border: 1px solid #e2e8f0;">
+          <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 4px; ${itemBg} border: 1px solid #e2e8f0;">
             <div>
-              <span style="font-weight: bold; font-size: 12px;">${item.name} (${item.start}-${item.end})</span>
-              <span style="margin-left: 10px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; ${badgeStyle}">${assignedVal}</span>
+              <span style="font-weight: bold; font-size: 13px;">${item.name} (${item.start}-${item.end})</span>
+              <span style="margin-left: 12px; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; ${badgeStyle}">${assignedVal}</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 6px;">
-              ${currentMemo ? `<span style="font-size:10px; background:#e53e3e; color:white; padding:1px 4px; border-radius:3px;">${currentMemo}</span>` : ''}
+            <div style="display: flex; align-items: center; gap: 8px;">
+              ${currentMemo ? `<span style="font-size:11px; background:#e53e3e; color:white; padding:2px 6px; border-radius:3px;">${currentMemo}</span>` : ''}
               ${memoSelectHtml}
             </div>
           </div>
         `;
 
-        // ガントチャートのバー表示
+        // 下部ガントチャートバー（画面幅いっぱいに伸びる仕様）
         let startPct = getOffsetPercent(item.start);
         let widthPct = (calcDuration(item.start, item.end) / 24) * 100;
         ganttRowsHtml += `
-          <div style="font-size: 10px; color: #4a5568; margin-bottom: 3px; display: flex; align-items: center; gap: 8px;">
-            <span style="width: 110px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name} (${assignedVal}${currentMemo ? `[${currentMemo}]` : ''}):</span>
-            <div style="flex-grow: 1; position: relative; height: 16px; background: #edf2f7; border-radius: 3px;">
-              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 9px; line-height: 16px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px;" title="${assignedVal}">${assignedVal}${currentMemo ? `(${currentMemo})` : ''}</div>
+          <div style="font-size: 11px; color: #4a5568; margin-bottom: 6px; display: flex; align-items: center; gap: 10px; width: 100%;">
+            <span style="width: 130px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${item.name} (${assignedVal}):</span>
+            <div style="flex-grow: 1; position: relative; height: 18px; background: #edf2f7; border-radius: 3px;">
+              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 10px; line-height: 18px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px;" title="${assignedVal}">${assignedVal}${currentMemo ? `(${currentMemo})` : ''}</div>
             </div>
           </div>
         `;
