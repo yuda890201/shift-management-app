@@ -241,8 +241,13 @@ function loadAllFromSheets() {
     });
 }
 
+// ==========================================
+// クラウド保存 (完全ガード版)
+// ==========================================
 function autoSave() {
+  // ★重要ガード：まだクラウドからロードが終わっていない時は絶対に勝手に保存させない
   if (!isLoadedFromSheets) return;
+  
   clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
     silentSaveToSheets();
@@ -251,6 +256,7 @@ function autoSave() {
 
 function silentSaveToSheets() {
   if (!isLoadedFromSheets) return;
+  
   let mw = document.getElementById('min-wage');
   let nr = document.getElementById('night-rate');
 
@@ -281,6 +287,13 @@ function silentSaveToSheets() {
 function saveAllNow() {
   return new Promise((resolve) => {
     clearTimeout(autoSaveTimer);
+    
+    // まだロードが終わっていない場合は保存処理をスキップ
+    if (!isLoadedFromSheets) {
+      resolve();
+      return;
+    }
+
     showLoading("データを保存しています...");
 
     let mw = document.getElementById('min-wage');
@@ -312,6 +325,8 @@ function saveAllNow() {
       if (data.status === "conflict") {
         alert("⚠️ 【競合エラー】\n" + data.message);
         loadAllFromSheets();
+      } else if (data.status === "error") {
+        alert("⚠️ 【保存エラー】\n" + data.message);
       } else if (data.status === "success") {
         serverLastUpdated = data.lastUpdated;
       }
