@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - オーバーレイ＆完全同期版)
+// フロントエンド制御ロジック (app.js - 統合・完全版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -8,7 +8,7 @@ let storeList = ['清川二丁目店', '博多住吉通り店'];
 let currentStore = '清川二丁目店';
 let isLoadedFromSheets = false;
 let autoSaveTimer = null;
-let serverLastUpdated = ""; // ★追加：サーバー側の最終更新日時を保持
+let serverLastUpdated = ""; 
 
 let slotData = [
   { name: '朝勤', start: '08:00', end: '13:00', slots: 1, colorClass: 'bg-morning' },
@@ -27,6 +27,12 @@ let fixedAssignments = {};
 let calAssignments = {};
 let offRequestsStore = {};
 const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
+
+// ダミー履歴データ（サマリー用）
+const HISTORICAL_6MONTH_DATA = {
+  "下城": { prescribed: 106, urgentOff: 1, reqOff: 2, helpCount: 0 },
+  "スレンドラ": { prescribed: 120, urgentOff: 0, reqOff: 1, helpCount: 2 }
+};
 
 // ==========================================
 // ローディング・オーバーレイ制御
@@ -69,7 +75,6 @@ function calcDuration(startStr, endStr) {
   return e - s;
 }
 
-// 日本の祝日算出
 function getHolidayName(dateObj) {
   let y = dateObj.getFullYear();
   let m = dateObj.getMonth() + 1;
@@ -162,11 +167,12 @@ function loadAllFromSheets() {
         }
 
         isLoadedFromSheets = true;
-        serverLastUpdated = data.lastUpdated || ""; // ★追加
+        serverLastUpdated = data.lastUpdated || ""; 
         recalculateAll();
         renderStaffTable();
         renderFixedShiftTable();
-        renderOffInputTab(); // ★ここでデータ読み込み完了時に休み入力リストも更新
+        renderOffInputTab();
+        renderHelpTab();
       } else {
         console.error("データ取得エラー:", data.message);
       }
@@ -178,19 +184,16 @@ function loadAllFromSheets() {
 }
 
 // ==========================================
-// クラウド保存 (Save with Debounce)
+// クラウド保存 (Save)
 // ==========================================
 function autoSave() {
   if (!isLoadedFromSheets) return;
   clearTimeout(autoSaveTimer);
-
-  // 変更があったことをマークしておく（必要に応じてフラグ管理など）
   autoSaveTimer = setTimeout(() => {
-    // 変更から少し時間が経ったらバックグラウンドでサイレント保存
     silentSaveToSheets();
   }, 1000);
 }
-// 画面を覆わずに裏でこっそり保存する関数
+
 function silentSaveToSheets() {
   if (!isLoadedFromSheets) return;
   let mw = document.getElementById('min-wage');
@@ -218,7 +221,7 @@ function silentSaveToSheets() {
     console.error("バックグラウンド保存エラー:", err);
   });
 }
-// 画面遷移（タブ切り替え）時に確実にオーバーレイを出して保存する関数
+
 function saveAllNow() {
   return new Promise((resolve) => {
     clearTimeout(autoSaveTimer);
@@ -228,7 +231,7 @@ function saveAllNow() {
     let nr = document.getElementById('night-rate');
 
     let payload = {
-      clientLastUpdated: serverLastUpdated, // ★追加：自分が保持しているタイムスタンプを送信
+      clientLastUpdated: serverLastUpdated,
       slotData: slotData,
       staffList: staffList,
       fixedAssignments: fixedAssignments,
@@ -241,10 +244,9 @@ function saveAllNow() {
       }
     };
 
-    // fetchでレスポンスを受け取るため no-cors を外し、POSTレスポンスを解析する
     fetch(GAS_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // GASのCORS制限回避のためのプラクティス
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     })
     .then(res => res.json())
@@ -252,10 +254,9 @@ function saveAllNow() {
       hideLoading();
       if (data.status === "conflict") {
         alert("⚠️ 【競合エラー】\n" + data.message);
-        // 必要に応じて強制再読み込み
         loadAllFromSheets();
       } else if (data.status === "success") {
-        serverLastUpdated = data.lastUpdated; // 成功したらタイムスタンプを更新
+        serverLastUpdated = data.lastUpdated;
       }
       resolve();
     })
@@ -266,6 +267,7 @@ function saveAllNow() {
     });
   });
 }
+
 // ==========================================
 // 画面遷移（タブ切り替え）ロジック
 // ==========================================
@@ -279,13 +281,14 @@ async function switchTab(tabId) {
   if (targetTab) targetTab.classList.add('active');
   if (event && event.currentTarget) event.currentTarget.classList.add('active');
 
-  // タブごとの再描画
   if (tabId === 'tab-calendar') {
     renderCalendarTab();
   } else if (tabId === 'tab-fixed') {
     renderFixedShiftTable();
   } else if (tabId === 'tab-off-input') {
-    renderOffInputTab(); // ★ここを追加！
+    renderOffInputTab();
+  } else if (tabId === 'tab-help') {
+    renderHelpTab();
   }
 }
 
@@ -642,122 +645,316 @@ function applyFixedToCal() {
   }
 }
 
-// --- 画面遷移（タブ切り替え）時の同期連動 ---
-function switchTab(tabId) {
-  // タブボタンとコンテンツの切り替え
-  document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  
-  let targetTab = document.getElementById(tabId);
-  if (targetTab) targetTab.classList.add('active');
-  if (event && event.currentTarget) event.currentTarget.classList.add('active');
-
-  // タブが切り替わったタイミングで、暦シフト表などの最新データを再描画
-  if (tabId === 'tab-calendar') {
-    renderCalendarTab();
-  } else if (tabId === 'tab-fixed') {
-    renderFixedShiftTable();
-  }
-}
-
 // ==========================================
-// ⑤ 休み実績・希望休入力ロジック（シンプル版）
+// ⑤ 休み実績・希望休入力ロジック (ご提示いただいたオリジナル)
 // ==========================================
-
-// ==========================================
-// ⑤ 休み実績・希望休入力ロジック（シンプル完全版）
-// ==========================================
-
 function renderOffInputTab() {
   let selectEl = document.getElementById('off-staff-select');
   if (!selectEl) return;
-  
-  let currentSelected = selectEl.value;
   selectEl.innerHTML = '';
-  
-  if (!staffList || staffList.length === 0) {
-    let opt = document.createElement('option');
-    opt.value = "";
-    opt.innerText = "スタッフが登録されていません";
-    selectEl.appendChild(opt);
-    return;
-  }
 
   staffList.forEach(s => {
     let opt = document.createElement('option');
     opt.value = s.name;
     opt.innerText = s.name;
-    if (s.name === currentSelected) opt.selected = true;
     selectEl.appendChild(opt);
   });
 
-  renderOffTable();
+  let selectedStaff = selectEl.value || (staffList[0] ? staffList[0].name : '');
+  let baseInput = document.getElementById('off-base-date')?.value;
+  let baseDate = new Date(baseInput || '2026-08-01');
+
+  let urgentTbody = document.getElementById('off-urgent-tbody');
+  let normalTbody = document.getElementById('off-normal-tbody');
+  if (!urgentTbody || !normalTbody) return;
+
+  urgentTbody.innerHTML = '';
+  normalTbody.innerHTML = '';
+
+  let dowNames = ['日', '月', '火', '水', '木', '金', '土'];
+
+  for (let offset = 0; offset <= 30; offset++) {
+    let targetDate = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate() + offset);
+    let yyyy = targetDate.getFullYear();
+    let mm = String(targetDate.getMonth() + 1).padStart(2, '0');
+    let dd = String(targetDate.getDate()).padStart(2, '0');
+    let dateStr = `${yyyy}-${mm}-${dd}`;
+    let dowStr = dowNames[targetDate.getDay()];
+
+    let rowIdx = 0;
+    slotData.forEach(item => {
+      for (let sIdx = 1; sIdx <= item.slots; sIdx++) {
+        rowIdx++;
+        let key = `${dateStr}_${rowIdx}`;
+        let assigned = calAssignments[key] || getFixedAssignmentFallback(targetDate, rowIdx);
+
+        if (assigned === selectedStaff) {
+          let isUrgent = (offset < 15);
+          let isChecked = offRequestsStore[key] ? 'checked' : '';
+          let noteVal = offRequestsStore[key] ? (offRequestsStore[key].reason || '') : '';
+
+          let tr = document.createElement('tr');
+          if (isUrgent) { tr.style.backgroundColor = '#fff5f5'; }
+
+          tr.innerHTML = `
+            <td><strong>${dateStr}</strong></td>
+            <td><strong>(${dowStr})</strong></td>
+            <td><span class="sidebar-stat-badge">${item.name} (${item.start}-${item.end})</span></td>
+            <td>
+              <input type="checkbox" ${isChecked} onchange="toggleOffRequest('${key}', '${selectedStaff}', '${dateStr}', '${item.name}', ${isUrgent}, this.checked)">
+              <span style="font-size:12px; margin-left:4px; font-weight:bold; ${isUrgent ? 'color:#e53e3e;' : ''}">
+                ${isUrgent ? '緊急休み' : '休み希望'}
+              </span>
+            </td>
+            <td>
+              <input type="text" class="editable-input" value="${noteVal}" placeholder="理由を入力" onchange="updateOffReason('${key}', this.value)">
+            </td>
+          `;
+
+          if (isUrgent) { urgentTbody.appendChild(tr); }
+          else { normalTbody.appendChild(tr); }
+        }
+      }
+    });
+  }
+
+  if (urgentTbody.children.length === 0) {
+    urgentTbody.innerHTML = '<tr><td colspan="5" style="color:gray; text-align:center;">※15日未満に勤務予定のシフトはありません。</td></tr>';
+  }
+  if (normalTbody.children.length === 0) {
+    normalTbody.innerHTML = '<tr><td colspan="5" style="color:gray; text-align:center;">※15日〜30日後に勤務予定のシフトはありません。</td></tr>';
+  }
+
+  renderOffSummaryTable();
 }
 
-function addOffRequest() {
-  let staffSelect = document.getElementById('off-staff-select');
-  let dateInput = document.getElementById('off-date-input');
+function renderOffSummaryTable() {
+  let summaryTbody = document.getElementById('off-summary-tbody');
+  if (!summaryTbody) return;
+  summaryTbody.innerHTML = '';
 
-  if (!staffSelect || !dateInput) return;
+  let storeName = document.getElementById('store-select')?.value || currentStore;
+  let baseInput = document.getElementById('off-base-date')?.value || '2026-08-01';
 
-  let staffName = staffSelect.value;
-  let dateStr = dateInput.value;
+  let pStore = document.getElementById('off-summary-store-name');
+  let pDate = document.getElementById('off-summary-base-date');
+  if (pStore) pStore.innerText = storeName;
+  if (pDate) pDate.innerText = baseInput;
 
-  if (!staffName) {
-    alert('スタッフを選択してください。');
-    return;
-  }
-  if (!dateStr) {
-    alert('日付を選択してください。');
-    return;
-  }
+  staffList.forEach(s => {
+    let hist = HISTORICAL_6MONTH_DATA[s.name] || { prescribed: 106, urgentOff: 0, reqOff: 0, helpCount: 0 };
 
-  if (!offRequestsStore[dateStr]) {
-    offRequestsStore[dateStr] = {};
-  }
-  offRequestsStore[dateStr][staffName] = true;
+    let currentUrgentOff = 0;
+    let currentReqOff = 0;
+    let currentHelpCount = 0;
 
-  renderOffTable();
-  autoSave();
-}
+    Object.keys(offRequestsStore).forEach(key => {
+      let req = offRequestsStore[key];
+      if (req.staffName === s.name) {
+        if (req.isUrgent) currentUrgentOff++;
+        else currentReqOff++;
+      }
+      if (req.finalizedStaff === s.name) {
+        currentHelpCount++;
+      }
+    });
 
-function removeOffRequest(dateStr, staffName) {
-  if (offRequestsStore[dateStr]) {
-    delete offRequestsStore[dateStr][staffName];
-    if (Object.keys(offRequestsStore[dateStr]).length === 0) {
-      delete offRequestsStore[dateStr];
+    let totalPrescribed = hist.prescribed;
+    let totalUrgentOff = hist.urgentOff + currentUrgentOff;
+    let totalReqOff = hist.reqOff + currentReqOff;
+    let totalHelpCount = hist.helpCount + currentHelpCount;
+
+    let totalActualDays = Math.max(0, totalPrescribed - totalUrgentOff - totalReqOff + totalHelpCount);
+    let urgentOffRate = (totalPrescribed > 0) ? Math.round((totalUrgentOff / totalPrescribed) * 100) : 0;
+    let attendRate = (totalPrescribed > 0) ? Math.min(100, Math.round((totalActualDays / totalPrescribed) * 100)) : 100;
+
+    let priorityBadge = '';
+    if (attendRate >= 100 && totalUrgentOff === 0) {
+      priorityBadge = '<span class="sidebar-stat-badge" style="background:#c6f6d5; color:#22543d;">最優先 (希望通り反映)</span>';
+    } else if (totalUrgentOff > 0 || attendRate < 85) {
+      priorityBadge = '<span class="sidebar-stat-badge" style="background:#fed7d7; color:#9b2c2c;">調整・削減対象</span>';
+    } else {
+      priorityBadge = '<span class="sidebar-stat-badge" style="background:#ebf8ff; color:#2b6cb0;">標準設定</span>';
     }
-  }
-  renderOffTable();
-  autoSave();
-}
 
-function renderOffTable() {
-  let tbody = document.getElementById('off-table-body');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  let dates = Object.keys(offRequestsStore).sort();
-
-  if (dates.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:var(--text-muted); padding:16px;">登録されている休み希望はありません。</td></tr>`;
-    return;
-  }
-
-  dates.forEach(dateStr => {
-    let staffMap = offRequestsStore[dateStr];
-    for (let staffName in staffMap) {
-      let tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${dateStr}</td>
-        <td><strong>${staffName}</strong></td>
-        <td><button class="btn btn-danger" style="padding:2px 8px; font-size:11px;" onclick="removeOffRequest('${dateStr}', '${staffName}')">削除</button></td>
-      `;
-      tbody.appendChild(tr);
-    }
+    let tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${s.id}</strong></td>
+      <td><strong>${s.name}</strong></td>
+      <td><strong>${totalPrescribed} 日</strong></td>
+      <td style="${totalUrgentOff > 0 ? 'color:#e53e3e; font-weight:bold;' : ''}">${totalUrgentOff} 日</td>
+      <td>${totalReqOff} 日</td>
+      <td><strong>${totalActualDays} 日</strong></td>
+      <td><strong style="${urgentOffRate > 0 ? 'color:#e53e3e;' : 'color:#38a169;'}">${urgentOffRate} %</strong></td>
+      <td><strong style="${attendRate >= 95 ? 'color:#38a169;' : 'color:#dd6b20;'}">${attendRate} %</strong></td>
+      <td>${priorityBadge}</td>
+    `;
+    summaryTbody.appendChild(tr);
   });
 }
-function renderHelpTab() {}
+
+function toggleOffRequest(key, staffName, dateStr, slotName, isUrgent, isChecked) {
+  if (isChecked) {
+    if (!offRequestsStore[key]) {
+      offRequestsStore[key] = {
+        staffName: staffName,
+        dateStr: dateStr,
+        slotName: slotName,
+        isUrgent: isUrgent,
+        reason: '',
+        candidates: {},
+        finalizedStaff: ''
+      };
+    }
+    calAssignments[key] = '【ヘルプ募集中】';
+  } else {
+    delete offRequestsStore[key];
+    delete calAssignments[key];
+  }
+  renderCalendarTab();
+  renderHelpTab();
+  renderOffSummaryTable();
+  autoSave();
+}
+
+function updateOffReason(key, reasonVal) {
+  if (offRequestsStore[key]) {
+    offRequestsStore[key].reason = reasonVal;
+    renderHelpTab();
+    autoSave();
+  }
+}
+
+// ==========================================
+// ⑥ ヘルプ募集・管理機能 (ご提示いただいたオリジナル)
+// ==========================================
+function renderHelpTab() {
+  let urgentTbody = document.getElementById('help-urgent-tbody');
+  let normalTbody = document.getElementById('help-normal-tbody');
+  if (!urgentTbody || !normalTbody) return;
+
+  urgentTbody.innerHTML = '';
+  normalTbody.innerHTML = '';
+
+  let keys = Object.keys(offRequestsStore);
+
+  keys.forEach(key => {
+    let req = offRequestsStore[key];
+    let tr = document.createElement('tr');
+
+    let candHtml = '<div style="display:flex; flex-direction:column; gap:4px;">';
+    staffList.forEach(s => {
+      if (s.name !== req.staffName) {
+        let isCand = req.candidates && req.candidates[s.name];
+        let checked = isCand ? 'checked' : '';
+        let tsText = isCand ? `<span class="candidate-timestamp">⏱ ${req.candidates[s.name]}</span>` : '';
+
+        candHtml += `
+          <div class="candidate-item">
+            <label style="cursor:pointer; font-weight:normal; display:flex; align-items:center; gap:4px;">
+              <input type="checkbox" ${checked} onchange="toggleHelpCandidate('${key}', '${s.name}', this.checked)">
+              <strong>${s.name}</strong>
+            </label>
+            ${tsText}
+          </div>
+        `;
+      }
+    });
+    candHtml += '</div>';
+
+    let managerHtml = `<div>`;
+    let finalized = req.finalizedStaff || '';
+
+    let selHtml = `<select class="editable-input" id="mgr-select-${key}" style="font-size:12px; margin-bottom:4px;" ${finalized ? 'disabled' : ''}>`;
+    selHtml += `<option value="">-- 決定スタッフを選択 --</option>`;
+    staffList.forEach(s => {
+      if (s.name !== req.staffName) {
+        let isCand = req.candidates && req.candidates[s.name];
+        let sel = (finalized === s.name) ? 'selected' : '';
+        selHtml += `<option value="${s.name}" ${sel}>${s.name} ${isCand ? '[候補あり]' : ''}</option>`;
+      }
+    });
+    selHtml += `</select>`;
+
+    let isApproved = finalized ? 'checked' : '';
+    let approvalBox = `
+      <div class="manager-decision-box">
+        <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" ${isApproved} onchange="toggleManagerApproval('${key}', this.checked)">
+          <span>👑 責任者決定 (確定反映)</span>
+        </label>
+      </div>
+    `;
+
+    managerHtml += selHtml + approvalBox + `</div>`;
+
+    tr.innerHTML = `
+      <td>2026/08/01</td>
+      <td><strong>${req.dateStr}</strong></td>
+      <td><strong>${req.staffName}</strong></td>
+      <td><span class="sidebar-stat-badge">${req.slotName}</span><br><small style="color:gray;">(${req.reason || '私用'})</small></td>
+      <td>${candHtml}</td>
+      <td>${managerHtml}</td>
+    `;
+
+    if (req.isUrgent) { urgentTbody.appendChild(tr); }
+    else { normalTbody.appendChild(tr); }
+  });
+
+  if (urgentTbody.children.length === 0) {
+    urgentTbody.innerHTML = '<tr><td colspan="6" style="color:gray; text-align:center;">※現在、直近15日未満の緊急ヘルプ募集はありません。</td></tr>';
+  }
+  if (normalTbody.children.length === 0) {
+    normalTbody.innerHTML = '<tr><td colspan="6" style="color:gray; text-align:center;">※現在、通常のヘルプ募集はありません。</td></tr>';
+  }
+}
+
+function toggleHelpCandidate(key, staffName, isChecked) {
+  if (offRequestsStore[key]) {
+    if (!offRequestsStore[key].candidates) {
+      offRequestsStore[key].candidates = {};
+    }
+    if (isChecked) {
+      let now = new Date();
+      let mm = String(now.getMonth() + 1).padStart(2, '0');
+      let dd = String(now.getDate()).padStart(2, '0');
+      let hh = String(now.getHours()).padStart(2, '0');
+      let min = String(now.getMinutes()).padStart(2, '0');
+      let ts = `${mm}/${dd} ${hh}:${min}`;
+
+      offRequestsStore[key].candidates[staffName] = ts;
+    } else {
+      delete offRequestsStore[key].candidates[staffName];
+    }
+    renderHelpTab();
+    autoSave();
+  }
+}
+
+function toggleManagerApproval(key, isChecked) {
+  if (offRequestsStore[key]) {
+    let selectEl = document.getElementById(`mgr-select-${key}`);
+    let chosenStaff = selectEl ? selectEl.value : '';
+
+    if (isChecked) {
+      if (!chosenStaff) {
+        alert('決定するヘルプスタッフをドロップダウンから選択してください。');
+        renderHelpTab();
+        return;
+      }
+      offRequestsStore[key].finalizedStaff = chosenStaff;
+      calAssignments[key] = chosenStaff;
+    } else {
+      offRequestsStore[key].finalizedStaff = '';
+      calAssignments[key] = '【ヘルプ募集中】';
+    }
+    renderCalendarTab();
+    renderHelpTab();
+    renderOffSummaryTable();
+    autoSave();
+  }
+}
+
 function promptAddNewStore() {}
 function promptRenameStore() {}
 function triggerPrint() { window.print(); }
@@ -768,9 +965,9 @@ function triggerPrint() { window.print(); }
 renderStoreSelect();
 loadAllFromSheets();
 
-// 初回ロード時に各タブの初期描画も確実に行う
 window.addEventListener('DOMContentLoaded', () => {
   renderStaffTable();
   renderFixedShiftTable();
   renderOffInputTab();
+  renderHelpTab();
 });
