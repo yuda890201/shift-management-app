@@ -76,7 +76,78 @@ function hideLoading() {
   let overlay = document.getElementById('loading-overlay');
   if (overlay) overlay.classList.remove('active');
 }
+// 💾 専用のバックアップセルへ手動退避する
+function manualBackup() {
+  if (!confirm("現在の状態を専用のバックアップ領域に保存しますか？")) return;
+  if (!slotData || slotData.length === 0) {
+    alert("エラー: データが空のためバックアップできません。");
+    return;
+  }
 
+  showLoading("バックアップを保存中...");
+
+  let payload = {
+    action: "backup",
+    payload: {
+      slotData: slotData,
+      staffList: staffList,
+      fixedAssignments: fixedAssignments,
+      calAssignments: calAssignments,
+      offRequestsStore: offRequestsStore,
+      calMemoAssignments: calMemoAssignments
+    }
+  };
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => res.json())
+  .then(data => {
+    hideLoading();
+    if (data.status === "success") {
+      alert("✅ バックアップの保存に成功しました！");
+    } else {
+      alert("⚠️ エラー: " + data.message);
+    }
+  })
+  .catch(err => {
+    hideLoading();
+    console.error("バックアップエラー:", err);
+    alert("通信エラーが発生しました。");
+  });
+}
+
+// 🔄 バックアップ領域からメインデータへ復元する
+function manualRestore() {
+  if (!confirm("⚠️ 注意：最後にバックアップした安全な状態に戻します。\n（バックアップ以降に行った未保存の変更は失われますがよろしいですか？）")) return;
+
+  showLoading("バックアップから復元中...");
+
+  let payload = { action: "restore" };
+
+  fetch(GAS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  })
+  .then(res => res.json())
+  .then(data => {
+    hideLoading();
+    if (data.status === "success") {
+      alert("🔄 バックアップからの復元に成功しました！データを再読み込みします。");
+      loadAllFromSheets(); // メインデータを再読込
+    } else {
+      alert("⚠️ エラー: " + data.message);
+    }
+  })
+  .catch(err => {
+    hideLoading();
+    console.error("復元エラー:", err);
+    alert("通信エラーが発生しました。");
+  });
+}
 // ==========================================
 // 時間・日付計算ユーティリティ
 // ==========================================
