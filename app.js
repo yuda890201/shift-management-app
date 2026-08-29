@@ -644,7 +644,7 @@ function updateSidebarStats() {
 }
 
 // ==========================================
-// ④ 暦シフト表 (今日を含む月曜〜日曜の1週間ガント ＆ 1か月カレンダーグリッド)
+// ④ 暦シフト表 (1週間ガント＆1か月カレンダーのスタイル個別分離)
 // ==========================================
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
@@ -680,7 +680,6 @@ function renderCalendarTab() {
   let modeSelect = document.getElementById('cal-mode-select');
   let mode = modeSelect ? modeSelect.value : 'week';
 
-  // 初回起動時や日付未設定時は「今日（現在日時）」を自動設定して当週を表示
   if (!baseInput.value) {
     let now = new Date();
     let yyyy = now.getFullYear();
@@ -690,10 +689,15 @@ function renderCalendarTab() {
   }
 
   let baseDate = new Date(baseInput.value);
+  let container = document.getElementById('cal-month-days-container');
+  if (!container) return;
 
+  // 1週間表示と1か月表示でコンテナのレイアウト（クラス名やスタイル）を完全に独立させる
   if (mode === 'week') {
+    container.className = ""; // グリッドを解除
     renderWeekGanttCalendar(baseDate);
   } else {
+    container.className = "cal-grid"; // 通常のカレンダーグリッドに戻す
     renderMonthTableCalendar(baseDate);
   }
 }
