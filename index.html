@@ -176,36 +176,40 @@
       </div>
     </div>
 
-    <!-- ⑤ 休み実績入力タブ -->
+<!-- ⑤ 休み実績入力タブの想定構造 -->
 <div id="tab-off-input" class="tab-content">
-      <h2>休み実績・休み申請入力</h2>
-      
-      <!-- 入力コントロール行 -->
-      <div class="controls-row">
-        <label>スタッフ: <select id="off-staff-select" class="editable-input"></select></label>
-        <label>対象日: <input type="date" id="off-date-input" class="editable-input" value="2026-08-01"></label>
-        <button class="btn btn-success" onclick="addOffRequest()">休み希望を追加</button>
-      </div>
+  <h2>休み実績・申請一覧</h2>
+  <select id="off-staff-select" onchange="renderOffInputTab()"></select>
+  <input type="date" id="off-base-date" value="2026-08-01" onchange="renderOffInputTab()">
+  
+  <!-- 緊急休みテーブル -->
+  <table>
+    <tbody id="off-urgent-tbody"></tbody>
+  </table>
+  
+  <!-- 通常休み希望テーブル -->
+  <table>
+    <tbody id="off-normal-tbody"></tbody>
+  </table>
 
-      <!-- 一覧表示テーブル -->
-      <table>
-        <thead>
-          <tr>
-            <th>日付</th>
-            <th>スタッフ名</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="off-table-body">
-          <!-- ここにJavaScriptで一覧が描画されます -->
-        </tbody>
-      </table>
-    </div>
+  <!-- サマリーテーブル -->
+  <table>
+    <tbody id="off-summary-tbody"></tbody>
+  </table>
+  <span id="off-summary-store-name"></span>
+  <span id="off-summary-base-date"></span>
+</div>
 
-    <!-- ⑥ ヘルプ募集タブ -->
-    <div id="tab-help" class="tab-content">
-      <h2>ヘルプ募集一覧</h2>
-    </div>
+<!-- ⑥ ヘルプ募集タブの想定構造 -->
+<div id="tab-help" class="tab-content">
+  <h2>ヘルプ募集・管理</h2>
+  <table>
+    <tbody id="help-urgent-tbody"></tbody>
+  </table>
+  <table>
+    <tbody id="help-normal-tbody"></tbody>
+  </table>
+</div>
 
   </div>
 
