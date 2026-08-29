@@ -1,5 +1,5 @@
 // ==========================================
-// フロントエンド制御ロジック (app.js - 完全レスポンシブ・最終版)
+// フロントエンド制御ロジック (app.js - 最終完全版)
 // ==========================================
 
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
@@ -644,7 +644,7 @@ function updateSidebarStats() {
 }
 
 // ==========================================
-// ④ 暦シフト表 (月曜〜日曜の自動取得・レスポンシブガント・全ハイライト対応)
+// ④ 暦シフト表 (今日を含む月曜〜日曜の1週間ガント ＆ 1か月カレンダーグリッド)
 // ==========================================
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
@@ -677,13 +677,10 @@ function renderCalendarTab() {
   initCalendarTabControls();
   let baseInput = document.getElementById('cal-base-date');
   
-  // ★修正: 再読み込み時などに勝手に1か月モードに戻らないよう、未設定なら「今日」を起点に「1週間表示(week)」をデフォルトにする
   let modeSelect = document.getElementById('cal-mode-select');
-  if (modeSelect && !modeSelect.value) {
-    modeSelect.value = 'week';
-  }
   let mode = modeSelect ? modeSelect.value : 'week';
 
+  // 初回起動時や日付未設定時は「今日（現在日時）」を自動設定して当週を表示
   if (!baseInput.value) {
     let now = new Date();
     let yyyy = now.getFullYear();
@@ -708,8 +705,7 @@ function getFixedAssignmentFallback(curDate, rowIdx) {
   return fixedAssignments[key] || '';
 }
 
-// 1週間ガントチャート表示 (月曜〜日曜の自動算出 ＆ 端末幅100%自動追従)
-// 1週間ガントチャート表示 (バー上のスタッフ名クリックでステータス変更対応)
+// 1週間ガントチャート表示 (月曜〜日曜自動算出 ＆ タップでステータス変更プルダウン)
 function renderWeekGanttCalendar(baseDate) {
   let titleEl = document.getElementById('cal-month-title');
   let container = document.getElementById('cal-month-days-container');
@@ -766,7 +762,6 @@ function renderWeekGanttCalendar(baseDate) {
       </div>
     `;
 
-    // 上部のスタッフリスト選択欄を非表示にし、ガントチャート図に集中させるため shiftsContentHtml はスッキリ省略またはコンパクトに
     let ganttRowsHtml = '<div style="width: 100%; box-sizing: border-box;"><div style="font-size: 11px; color: gray; font-weight: bold; margin-bottom: 8px;">📊 ガントチャート図 (バーをタップしてステータス変更):</div>';
 
     let rowIdx = 0;
@@ -791,19 +786,16 @@ function renderWeekGanttCalendar(baseDate) {
           }
         }
 
-        // ガントチャートのバー（テキスト部分を直接タップしてステータス変更できるようにセレクトボックスを重ねるか、クリックイベントを付与）
         let startPct = getOffsetPercent(item.start);
         let widthPct = (calcDuration(item.start, item.end) / 24) * 100;
         
-        // バーの上に透明または選択可能なセレクトを重ねるか、タップ時にプロンプト等でステータス変更できるようにする
         ganttRowsHtml += `
           <div style="font-size: 11px; color: #4a5568; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; width: 100%; box-sizing: border-box;">
             <span style="width: 130px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0;" title="${item.name}">${item.name}:</span>
-            <div style="flex-grow: 1; position: relative; height: 24px; background: #edf2f7; border-radius: 3px; width: 100%;">
-              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 10px; line-height: 24px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; cursor: pointer;" 
-                   onclick="promptChangeMemo('${key}', '${assignedVal}')" 
-                   title="タップしてステータス変更">
-                ${assignedVal}${currentMemo ? ` [${currentMemo}]` : ''} ✏️
+            <div style="flex-grow: 1; position: relative; height: 26px; background: #edf2f7; border-radius: 3px; width: 100%;">
+              <div style="position: absolute; left: ${startPct}%; width: ${widthPct}%; height: 100%; ${barColor} color: white; font-size: 10px; line-height: 26px; text-align: center; border-radius: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer;" 
+                   title="タップしてステータsス変更">
+                <span onclick="promptChangeMemo('${key}', '${assignedVal}')" style="font-weight:bold; overflow:hidden; text-overflow:ellipsis;">${assignedVal}${currentMemo ? ` [${currentMemo}]` : ''} ✏️</span>
               </div>
             </div>
           </div>
@@ -819,28 +811,37 @@ function renderWeekGanttCalendar(baseDate) {
   container.appendChild(scrollWrapper);
 }
 
-// バーをタップしたときに突発ステータスを変更するダイアログ関数
+// ★修正: リストから選択式でステータス変更するポップアップダイアログ
 function promptChangeMemo(key, staffName) {
   if (staffName === '未設定' || staffName === '【ヘルプ募集中】') {
     alert("スタッフがアサインされている枠のみステータスを変更できます。");
     return;
   }
   let current = calMemoAssignments[key] || '';
-  let input = prompt(`【${staffName}】のステータスを選択・入力してください。\n(例: 突発休み, 遅刻, 早退 など。空欄にするとクリアされます)`, current);
   
-  if (input !== null) {
-    let clean = input.trim();
-    if (clean === "") {
+  // 選択肢リストからのプロンプト入力
+  let choice = prompt(`【${staffName} のステータス選択】\n以下の番号または名称を入力してください。\n\n1: 突発休み\n2: 遅刻\n3: 早退\n(クリアする場合は空欄にしてOK)`, current);
+  
+  if (choice !== null) {
+    let clean = choice.trim();
+    let newVal = "";
+    if (clean === "1" || clean.includes("突発休み")) newVal = "突発休み";
+    else if (clean === "2" || clean.includes("遅刻")) newVal = "遅刻";
+    else if (clean === "3" || clean.includes("早退")) newVal = "早退";
+    else if (clean === "") newVal = "";
+    else newVal = clean; // 直接入力された場合も許容
+
+    if (newVal === "") {
       delete calMemoAssignments[key];
     } else {
-      calMemoAssignments[key] = clean;
+      calMemoAssignments[key] = newVal;
     }
     renderCalendarTab();
     autoSave();
   }
 }
 
-// 1か月テーブルマトリクス表示 (アイコンだけでなくテキストも含めて全体をハイライト)
+// 1か月テーブルマトリクス表示 (通常のカレンダー体裁・グリッドデザイン)
 function renderMonthTableCalendar(baseDate) {
   let year = baseDate.getFullYear();
   let month = baseDate.getMonth();
@@ -851,6 +852,9 @@ function renderMonthTableCalendar(baseDate) {
   let container = document.getElementById('cal-month-days-container');
   if (!container) return;
   container.innerHTML = '';
+
+  // 1か月表示は従来の通常のカレンダーグリッドレイアウトに戻す
+  container.className = "cal-grid";
 
   let firstDay = new Date(year, month, 1);
   let lastDay = new Date(year, month + 1, 0);
@@ -885,12 +889,11 @@ function renderMonthTableCalendar(baseDate) {
         let assignedVal = (calAssignments[key] !== undefined) ? calAssignments[key] : defaultVal;
         let currentMemo = calMemoAssignments[key] || '';
 
-        // ★修正: 突発メモ（突発休み・遅刻・早退など）がある場合は、テキスト全体を赤系でガッツリハイライト
         let badgeBg = '#ebf8ff';
         let badgeColor = '#2b6cb0';
 
         if (currentMemo) {
-          badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; // テキスト全体を赤系の警告色でハイライト
+          badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; 
         } else if (!assignedVal) {
           badgeBg = '#fed7d7'; badgeColor = '#9b2c2c'; assignedVal = '未設定';
         } else if (assignedVal === '【ヘルプ募集中】') {
@@ -904,7 +907,7 @@ function renderMonthTableCalendar(baseDate) {
 
         let displayText = assignedVal;
         if (currentMemo) {
-          displayText += ` (${currentMemo})`; // テキスト部分にステータスを明記してハイライト
+          displayText += ` (${currentMemo})`;
         }
 
         tableRowsHtml += `
