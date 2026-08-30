@@ -531,10 +531,12 @@ function recalculateAll() {
       <button class="btn" style="padding:1px 5px; font-size:10px;" ${index === slotData.length - 1 ? 'disabled' : ''} onclick="moveSlot(${index}, 1)">▼</button>
     `;
 
-    let deleteButton = '';
-    if (index >= 5) {
-      deleteButton = `<button class="btn btn-danger" style="padding:2px 6px; font-size:10px; margin-left:6px;" onclick="deleteSlotRow(${index})">削除</button>`;
-    }
+// 修正後: 初期固定の5つの名称以外のときに削除ボタンを表示するように変更
+let defaultSlotNames = ['朝勤', '昼勤', '夕勤', '夜勤', '準夜勤/フォロー'];
+let deleteButton = '';
+if (!defaultSlotNames.includes(item.name)) {
+  deleteButton = `<button class="btn btn-danger" style="padding:2px 6px; font-size:10px; margin-left:6px;" onclick="deleteSlotRow(${index})">削除</button>`;
+}
 
     let tr = document.createElement('tr');
     tr.innerHTML = `
@@ -579,7 +581,8 @@ function addSlotRow() {
 }
 
 function deleteSlotRow(index) {
-  if (index < 5) {
+  let defaultSlotNames = ['朝勤', '昼勤', '夕勤', '夜勤', '準夜勤/フォロー'];
+  if (defaultSlotNames.includes(slotData[index].name)) {
     alert("初期シフト枠は削除できません。");
     return;
   }
