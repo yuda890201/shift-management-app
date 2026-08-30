@@ -236,10 +236,28 @@ function renderStoreSelect() {
   });
 }
 
+// ==========================================
+// 店舗切り替え処理（店舗別データの完全読み込み）
+// ==========================================
 function switchStore(storeName) {
-  currentStore = storeName;
-  isLoadedFromSheets = false;
-  loadAllFromSheets();
+  if (currentStore === storeName && isLoadedFromSheets) return;
+  
+  if (confirm(`店舗を「${storeName}」に切り替えますか？\n（※現在編集中の未保存データは切り替え先の店舗データに上書きされます）`)) {
+    currentStore = storeName;
+    isLoadedFromSheets = false;
+    
+    // 切り替え前に一旦データを初期化して空表示にする
+    fixedAssignments = {};
+    calAssignments = {};
+    offRequestsStore = {};
+    calMemoAssignments = {};
+    
+    // 選択された店舗のデータをサーバーから新規取得
+    loadAllFromSheets();
+  } else {
+    // キャンセルされた場合はドロップダウンの選択を元の店舗に戻す
+    renderStoreSelect();
+  }
 }
 
 function promptAddNewStore() {
