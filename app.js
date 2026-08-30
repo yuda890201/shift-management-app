@@ -12,8 +12,8 @@ window.addEventListener('beforeunload', (event) => {
 });
 const GAS_URL = "https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec";
 
-let storeList = ['清川二丁目店', '博多住吉通り店'];
-let currentStore = '清川二丁目店';
+let storeList = ['1号店', '2号店'];
+let currentStore = '1号店';
 let isLoadedFromSheets = false;
 let autoSaveTimer = null;
 let serverLastUpdated = ""; 
