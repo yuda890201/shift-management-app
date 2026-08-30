@@ -286,18 +286,30 @@ function promptAddNewStore() {
   }
 }
 
+// ==========================================
+// 店舗名の変更処理（アプリ上の即時反映とサーバー保存）
+// ==========================================
 function promptRenameStore() {
   let name = prompt(`店舗「${currentStore}」の新しい名称を入力してください：`, currentStore);
   if (name && name.trim() !== "" && name.trim() !== currentStore) {
     let newName = name.trim();
     let idx = storeList.indexOf(currentStore);
+    
     if (idx !== -1) {
+      // 1. アプリ側の店舗リストの名称を書き換える
       storeList[idx] = newName;
       currentStore = newName;
+      
+      // 2. ドロップダウンを今すぐ新しいリストに描き直す
       renderStoreSelect();
+      
+      // 3. サーバー（スプレッドシート）に新しい店舗名で即時保存してデータを確定させる
       saveAllNow().then(() => {
         loadAllFromSheets();
+        alert(`店舗名を「${newName}」に変更しました！`);
       });
+    } else {
+      alert("エラー: 変更対象の店舗が見つかりませんでした。");
     }
   }
 }
