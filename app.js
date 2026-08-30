@@ -608,17 +608,34 @@ function renderGanttChart() {
   if (!container) return;
   container.innerHTML = '';
 
-  let getOffsetPercent = (timeStr) => {
-    let h = timeToHours(timeStr);
-    if (h < 8) h += 24;
-    let adjusted = h - 8;
-    return (adjusted / 24) * 100;
+  // 朝6時（06:00 = 360分）を起点とした経過分を計算するヘルパー
+  let getMinutesFrom06 = (timeStr) => {
+    if (!timeStr) return 0;
+    let parts = timeStr.split(':');
+    let h = parseInt(parts[0], 10);
+    let m = parseInt(parts[1], 10);
+    
+    // 6時未満（深夜0時〜5時台など）の場合は翌日扱いとして24時間を足す
+    if (h < 6) {
+      h += 24;
+    }
+    return (h * 60 + m) - (6 * 60); // 06:00 を 0分 とする
   };
 
+  let totalMinutesInDay = 26 * 60; // 6時〜翌8時までの総分（1560分）
+
   slotData.forEach((item) => {
-    let dur = calcDuration(item.start, item.end);
-    let startPct = getOffsetPercent(item.start);
-    let widthPct = (dur / 24) * 100;
+    let startMin = getMinutesFrom06(item.start);
+    let endMin = getMinutesFrom06(item.end);
+
+    // 夜をまたぐシフト（例: 22:00〜08:00）で終了時間が開始時間より小さくなる場合のケア
+    if (endMin <= startMin) {
+      endMin += 24 * 60;
+    }
+
+    let durMinutes = endMin - startMin;
+    let startPct = (startMin / totalMinutesInDay) * 100;
+    let widthPct = (durMinutes / totalMinutesInDay) * 100;
 
     for (let i = 1; i <= item.slots; i++) {
       let row = document.createElement('div');
