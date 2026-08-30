@@ -531,12 +531,11 @@ function recalculateAll() {
       <button class="btn" style="padding:1px 5px; font-size:10px;" ${index === slotData.length - 1 ? 'disabled' : ''} onclick="moveSlot(${index}, 1)">▼</button>
     `;
 
-// 修正後: 初期固定の5つの名称以外のときに削除ボタンを表示するように変更
-let defaultSlotNames = ['朝勤', '昼勤', '夕勤', '夜勤', '準夜勤/フォロー'];
-let deleteButton = '';
-if (!defaultSlotNames.includes(item.name)) {
-  deleteButton = `<button class="btn btn-danger" style="padding:2px 6px; font-size:10px; margin-left:6px;" onclick="deleteSlotRow(${index})">削除</button>`;
-}
+    let defaultSlotNames = ['朝勤', '昼勤', '夕勤', '夜勤', '準夜勤/フォロー'];
+    let deleteButton = '';
+    if (!defaultSlotNames.includes(item.name)) {
+      deleteButton = `<button class="btn btn-danger" style="padding:2px 6px; font-size:10px; margin-left:6px;" onclick="deleteSlotRow(${index})">削除</button>`;
+    }
 
     let tr = document.createElement('tr');
     tr.innerHTML = `
@@ -555,6 +554,7 @@ if (!defaultSlotNames.includes(item.name)) {
     tbody.appendChild(tr);
   });
 
+  // KPIカードの更新
   let dc = document.getElementById('kpi-daily-cost');
   let dh = document.getElementById('kpi-daily-hours');
   let mc = document.getElementById('kpi-monthly-cost');
@@ -564,6 +564,30 @@ if (!defaultSlotNames.includes(item.name)) {
   if (dh) dh.innerText = '総稼働時間: ' + totalDailyHours.toFixed(1) + ' 時間 / 日';
   if (mc) mc.innerText = '¥' + Math.round(totalDailyCost * 30).toLocaleString();
   if (ts) ts.innerText = totalSlotsCount + ' 枠 / 日';
+
+  // ★ 追加：指定曜日間の人件費試算の計算と反映
+  let d1El = document.getElementById('range-day-1');
+  let d2El = document.getElementById('range-day-2');
+  let rangeCostEl = document.getElementById('custom-range-cost');
+  
+  if (d1El && d2El && rangeCostEl) {
+    const daysOrder = ['月', '火', '水', '木', '金', '土', '日'];
+    let i1 = daysOrder.indexOf(d1El.value);
+    let i2 = daysOrder.indexOf(d2El.value);
+    let dayCount = 0;
+    
+    if (i1 !== -1 && i2 !== -1) {
+      if (i2 >= i1) {
+        dayCount = (i2 - i1) + 1;
+      } else {
+        dayCount = (daysOrder.length - i1) + i2 + 1;
+      }
+      // 1ヶ月（4週間強＝月4.3週換算、あるいは単純に日数×週数など。既存のロジックに合わせて週数分のコストを算出）
+      // ここでは選択された曜日数×4.3週分、または指定日数分の月間トータルとして算出
+      let monthlyRangeCost = totalDailyCost * dayCount * 4.3;
+      rangeCostEl.innerText = '¥' + Math.round(monthlyRangeCost).toLocaleString();
+    }
+  }
 
   renderGanttChart();
 }
