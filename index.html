@@ -85,12 +85,16 @@
           <div class="kpi-num" id="kpi-total-slots">0 枠 / 日</div>
           <div class="kpi-sub">固定シフト表の枠に連動します</div>
         </div>
-        <div style="margin-top:12px; padding:10px; background:#f7fafc; border-radius:6px; display:flex; align-items:center; gap:10px; font-size:13px; width:100%; box-sizing:border-box;">
-          <span>💡 指定曜日間の人件費試算:</span>
-          <select id="range-day-1" onchange="recalculateAll()" class="editable-input" style="width:60px;"><option value="月">月</option><option value="日">日</option></select>
+<div style="margin-top:12px; padding:10px; background:#f7fafc; border-radius:6px; display:flex; align-items:center; gap:10px; font-size:13px; width:100%; box-sizing:border-box;">
+          <span>💡 指定曜日間の人件費・総時間試算:</span>
+          <select id="range-day-1" onchange="recalculateAll()" class="editable-input" style="width:55px;">
+            <option value="月">月</option><option value="火">火</option><option value="水">水</option><option value="木">木</option><option value="金">金</option><option value="土">土</option><option value="日">日</option>
+          </select>
           <span>〜</span>
-          <select id="range-day-2" onchange="recalculateAll()" class="editable-input" style="width:60px;"><option value="金" selected>金</option><option value="土">土</option></select>
-          <strong id="custom-range-cost" style="color:var(--primary); font-size:14px;">¥0</strong>
+          <select id="range-day-2" onchange="recalculateAll()" class="editable-input" style="width:55px;">
+            <option value="月">月</option><option value="火">火</option><option value="水">水</option><option value="木">木</option><option value="金">金</option><option value="土">土</option><option value="日" selected>日</option>
+          </select>
+          <strong id="custom-range-cost" style="color:var(--primary); font-size:13px;">¥0 （総時間: 0.0 h）</strong>
         </div>
       </div>
 
