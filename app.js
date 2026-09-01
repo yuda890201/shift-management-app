@@ -321,47 +321,69 @@ function triggerPrint() {
 // ==========================================
 // クラウド読み込み・保存
 // ==========================================
-function loadAllFromSheets() {
-  showLoading("クラウドからデータを読み込んでいます...");
+// 起動時に一度だけ店舗を尋ねるためのフラグ
+let hasSelectedStoreOnStartup = false;
 
-  fetch(`${GAS_URL}?store=${encodeURIComponent(currentStore)}`)
+function loadAllFromSheets() {
+  showLoading("データを読み込み中...");
+  
+  let url = `${GAS_URL}?store=${encodeURIComponent(currentStore)}`;
+  
+  fetch(url)
     .then(res => res.json())
     .then(data => {
       hideLoading();
       if (data.status === "success") {
-        if (data.storeList && data.storeList.length > 0) {
-          storeList = data.storeList;
-          renderStoreSelect();
+        storeList = data.storeList || ['1号店', '2号店'];
+        
+        // ★アプリ起動時の初回のみ、どの店舗を開くか確認する
+        if (!hasSelectedStoreOnStartup) {
+          hasSelectedStoreOnStartup = true;
+          let storeListStr = storeList.join(" / ");
+          let selected = prompt(`どの店舗のシフト管理を開きますか？\n\n【登録店舗】\n${storeListStr}\n\n店舗名を入力してください：`, storeList[0]);
+          
+          if (selected && storeList.includes(selected.trim())) {
+            currentStore = selected.trim();
+            // 選択された店舗名で再度データを取得し直す
+            if (currentStore !== data.storeName) {
+              loadAllFromSheets();
+              return;
+            }
+          }
         }
-        if (data.slotData) slotData = data.slotData;
-        if (data.staffList) staffList = data.staffList;
-        if (data.fixedAssignments) fixedAssignments = data.fixedAssignments;
-        if (data.calAssignments) calAssignments = data.calAssignments;
-        if (data.offRequestsStore) offRequestsStore = data.offRequestsStore;
-        if (data.calMemoAssignments) calMemoAssignments = data.calMemoAssignments;
+
+        // データの反映処理
+        slotData = data.slotData || getDefaultSlotData();
+        staffList = data.staffList || [];
+        fixedAssignments = data.fixedAssignments || {};
+        calAssignments = data.calAssignments || {};
+        offRequestsStore = data.offRequestsStore || {};
+        calMemoAssignments = data.calMemoAssignments || {};
         
         if (data.config) {
           let mw = document.getElementById('min-wage');
           let nr = document.getElementById('night-rate');
-          if (mw) mw.value = data.config.minWage || 1057;
-          if (nr) nr.value = data.config.nightRate || 1.25;
+          if (mw && data.config.minWage) mw.value = data.config.minWage;
+          if (nr && data.config.nightRate) nr.value = data.config.nightRate;
         }
 
-        isLoadedFromSheets = true;
-        serverLastUpdated = data.lastUpdated || ""; 
+        renderStoreSelect();
         recalculateAll();
         renderStaffTable();
         renderFixedShiftTable();
+        renderCalendarTab();
         renderOffInputTab();
         renderHelpTab();
-        renderCalendarTab();
+        
+        isLoadedFromSheets = true;
       } else {
-        console.error("データ取得エラー:", data.message);
+        alert("⚠️ データ読み込みエラー: " + data.message);
       }
     })
     .catch(err => {
       hideLoading();
       console.error("通信エラー:", err);
+      alert("サーバーとの通信に失敗しました。");
     });
 }
 
@@ -565,7 +587,7 @@ function recalculateAll() {
   if (mc) mc.innerText = '¥' + Math.round(totalDailyCost * 30).toLocaleString();
   if (ts) ts.innerText = totalSlotsCount + ' 枠 / 日';
 
-  // ★ 追加：指定曜日間の人件費試算の計算と反映
+// 指定曜日間の人件費・総時間試算の計算と反映
   let d1El = document.getElementById('range-day-1');
   let d2El = document.getElementById('range-day-2');
   let rangeCostEl = document.getElementById('custom-range-cost');
@@ -582,10 +604,9 @@ function recalculateAll() {
       } else {
         dayCount = (daysOrder.length - i1) + i2 + 1;
       }
-      // 1ヶ月（4週間強＝月4.3週換算、あるいは単純に日数×週数など。既存のロジックに合わせて週数分のコストを算出）
-      // ここでは選択された曜日数×4.3週分、または指定日数分の月間トータルとして算出
       let monthlyRangeCost = totalDailyCost * dayCount * 4.3;
-      rangeCostEl.innerText = '¥' + Math.round(monthlyRangeCost).toLocaleString();
+      let monthlyRangeHours = totalDailyHours * dayCount * 4.3;
+      rangeCostEl.innerText = `¥${Math.round(monthlyRangeCost).toLocaleString()} （総時間: ${monthlyRangeHours.toFixed(1)} h）`;
     }
   }
 
