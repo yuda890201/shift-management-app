@@ -336,20 +336,65 @@ function loadAllFromSheets() {
       if (data.status === "success") {
         storeList = data.storeList || ['1号店', '2号店'];
         
-        // ★アプリ起動時の初回のみ、どの店舗を開くか確認する
+// ★アプリ起動時の初回のみ、ボタン選択式の店舗選択モーダルを表示する
         if (!hasSelectedStoreOnStartup) {
           hasSelectedStoreOnStartup = true;
-          let storeListStr = storeList.join(" / ");
-          let selected = prompt(`どの店舗のシフト管理を開きますか？\n\n【登録店舗】\n${storeListStr}\n\n店舗名を入力してください：`, storeList[0]);
           
-          if (selected && storeList.includes(selected.trim())) {
-            currentStore = selected.trim();
-            // 選択された店舗名で再度データを取得し直す
-            if (currentStore !== data.storeName) {
-              loadAllFromSheets();
-              return;
-            }
-          }
+          // 既存のモーダルがあれば削除
+          let existingModal = document.getElementById('startup-store-modal');
+          if (existingModal) existingModal.remove();
+
+          // モーダル全体のコンテナ作成
+          let modal = document.createElement('div');
+          modal.id = 'startup-store-modal';
+          modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); display: flex; justify-content: center;
+            align-items: center; z-index: 9999; font-family: sans-serif;
+          `;
+
+          // モーダルの中身（カード）
+          let content = document.createElement('div');
+          content.style.cssText = `
+            background: white; padding: 24px; border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2); text-align: center; max-width: 320px; width: 90%;
+          `;
+          content.innerHTML = `
+            <h3 style="margin-top:0; color:#2b6cb0; font-size:18px;">🏪 店舗を選択してください</h3>
+            <p style="font-size:13px; color:#666; margin-bottom:20px;">操作する店舗のボタンを押してください。</p>
+            <div id="startup-store-buttons" style="display: flex; flex-direction: column; gap: 10px;"></div>
+          `;
+
+          let btnContainer = content.querySelector('#startup-store-buttons');
+
+          // 登録されている店舗ごとにボタンを動的生成
+          storeList.forEach(store => {
+            let btn = document.createElement('button');
+            btn.innerText = store;
+            btn.className = 'btn';
+            btn.style.cssText = `
+              padding: 12px; font-size: 15px; font-weight: bold; background: #2b6cb0;
+              color: white; border: none; border-radius: 6px; cursor: pointer;
+            `;
+            btn.onmouseover = () => btn.style.background = '#2c5282';
+            btn.onmouseout = () => btn.style.background = '#2b6cb0';
+            
+            btn.onclick = () => {
+              currentStore = store;
+              modal.remove();
+              // 選択された店舗名で再度データを取得し直す
+              if (currentStore !== data.storeName) {
+                loadAllFromSheets();
+              } else {
+                proceedAfterStoreSelected();
+              }
+            };
+            btnContainer.appendChild(btn);
+          });
+
+          modal.appendChild(content);
+          document.body.appendChild(modal);
+          return; // 店舗が選ばれるまで後続の描画を一旦ストップ
         }
 
         // データの反映処理
@@ -385,6 +430,18 @@ function loadAllFromSheets() {
       console.error("通信エラー:", err);
       alert("サーバーとの通信に失敗しました。");
     });
+}
+
+// 店舗選択完了後に各種画面を描画するヘルパー関数
+function proceedAfterStoreSelected() {
+  renderStoreSelect();
+  recalculateAll();
+  renderStaffTable();
+  renderFixedShiftTable();
+  renderCalendarTab();
+  renderOffInputTab();
+  renderHelpTab();
+  isLoadedFromSheets = true;
 }
 
 function autoSave() {
