@@ -1547,18 +1547,11 @@ function toggleManagerApproval(key, isChecked) {
 }
 
 // ==========================================
-// 初期化実行 (初回ロード時は暦シフト表を開く)
+// 初期化実行 (アプリ起動)
 // ==========================================
 renderStoreSelect();
-loadAllFromSheets();
 
 window.addEventListener('DOMContentLoaded', () => {
-  renderStaffTable();
-  renderFixedShiftTable();
-  renderOffInputTab();
-  renderHelpTab();
-  
-  setTimeout(() => {
-    switchTab('tab-calendar');
-  }, 100);
+  // 起動時はまずデータをサーバーから読み込み、その中で店舗選択モーダルを起動する
+  loadAllFromSheets();
 });
