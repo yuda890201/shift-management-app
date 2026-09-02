@@ -514,6 +514,20 @@
 </head>
 <body>
 
+  <div id="login-overlay" style="position:fixed; inset:0; background:#f7fafc; z-index:9999; display:flex; align-items:center; justify-content:center;">
+    <form id="login-form" style="background:#fff; padding:32px; border-radius:10px; box-shadow:0 2px 16px rgba(0,0,0,0.15); width:300px;">
+      <h2 style="margin-top:0; text-align:center;">🏪 シフト管理アプリ</h2>
+      <label style="display:block; margin-bottom:12px; font-size:14px;">メールアドレス
+        <input type="email" id="login-email" required autocomplete="username" style="width:100%; padding:8px; margin-top:4px; box-sizing:border-box;">
+      </label>
+      <label style="display:block; margin-bottom:18px; font-size:14px;">パスワード
+        <input type="password" id="login-password" required autocomplete="current-password" style="width:100%; padding:8px; margin-top:4px; box-sizing:border-box;">
+      </label>
+      <button type="submit" class="btn btn-success" style="width:100%;">ログイン</button>
+      <p id="login-error" style="color:var(--danger); font-size:13px; margin-bottom:0; min-height:1.2em;"></p>
+    </form>
+  </div>
+
   <nav class="navbar no-print">
     <div class="nav-brand">🏪 シフト管理アプリ <small style="font-size:12px; color:gray;">(全自動クラウド同期)</small></div>
     <div class="nav-tabs">
@@ -528,14 +542,13 @@
 
   <div class="container">
 
-    <!-- スプレッドシートURL設定バー (デフォルト埋め込み対応) -->
-    <div class="controls-row no-print" style="background:#fffaf0; border-color:#feebc8;">
-      <label>🔗 Google Web App URL: 
-        <input type="text" id="gas-url-input" style="width:480px;" placeholder="https://script.google.com/macros/s/AKfycby49KDuUNkFBfJQhBLlXYqKRQRFzl19V7I9YMuufshkdP8IYAI2k9jrLgMbtjzqvjIz/exec">
-      </label>
-      <button class="btn btn-success" onclick="saveGasUrlAndLoad()">同期設定</button>
-      <button class="btn" onclick="loadAllFromSheets()">手動更新</button>
+    <!-- クラウド同期ステータス -->
+    <div class="controls-row no-print" style="background:#fffaf0; border-color:#feebc8; justify-content:space-between;">
       <span id="sync-status" class="sync-badge sync-ok">🟢 自動同期中</span>
+      <div>
+        <button class="btn" onclick="loadAllFromFirestore()">手動更新</button>
+        <button class="btn" onclick="signOutUser()">ログアウト</button>
+      </div>
     </div>
 
     <!-- ① シフト枠設定画面 -->
@@ -618,7 +631,7 @@
     <div id="tab-staff" class="tab-content">
       <h2>スタッフ管理</h2>
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <p style="font-size:13px; color:var(--text-muted); margin:0;">スプレッドシートと自動同期されるスタッフマスタです。</p>
+        <p style="font-size:13px; color:var(--text-muted); margin:0;">クラウドと自動同期されるスタッフマスタです。</p>
         <button class="btn btn-success" onclick="addStaffRow()">+ スタッフ追加</button>
       </div>
 
@@ -672,7 +685,7 @@
       <div class="print-preview-container printable-area" style="margin-top:28px;">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--primary); padding-bottom:8px; margin-bottom:16px;">
           <h3 style="margin:0; color:var(--primary); font-size:16px;">【印刷プレビュー】基本週間固定シフト表 ＆ 曜日別(月〜日)ガントチャート</h3>
-          <span style="font-size:12px; color:var(--text-muted);">店舗名: <span id="preview-store-name">清川二丁目店</span></span>
+          <span style="font-size:12px; color:var(--text-muted);">店舗名: <span id="preview-store-name"></span></span>
         </div>
 
         <h4 style="font-size:14px; margin:10px 0 6px 0;">■ 週間固定シフト配置表</h4>
@@ -790,7 +803,7 @@
         </div>
 
         <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-bottom:12px;">
-          <span>対象店舗: <strong id="off-summary-store-name" style="color:var(--text-main);">清川二丁目店</strong></span>
+          <span>対象店舗: <strong id="off-summary-store-name" style="color:var(--text-main);"></strong></span>
           <span>集計基準日: <strong id="off-summary-base-date" style="color:var(--text-main);">2026年8月1日</strong> （過去6か月間累計）</span>
         </div>
 
@@ -868,16 +881,39 @@
 
   </div>
 
+<!-- Firebase (Firestore + Authentication) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
 // =================================================================
-// 【URL設定】ここに発行されたWeb App URLを貼り付けておくと自動で読み込まれます
+// 【Firebase設定】Firebaseコンソール「プロジェクトの設定」→「マイアプリ」の値を貼り付けてください。
+// この値は公開情報です(秘密鍵ではありません)。アクセス制御は firestore.rules 側で行います。
 // =================================================================
-const DEFAULT_GAS_URL = ""; // 例: "https://script.google.com/macros/s/AKfycb.../exec"
+const firebaseConfig = {
+  apiKey: "AIzaSyD7ebG8JUiXQImRN81CpK0RY0xyohhzrVU",
+  authDomain: "shift-management-app-c6df2.firebaseapp.com",
+  projectId: "shift-management-app-c6df2",
+  storageBucket: "shift-management-app-c6df2.firebasestorage.app",
+  messagingSenderId: "999089284694",
+  appId: "1:999089284694:web:eee2a57e78599c1fd2fdf7"
+};
+let auth = null;
+let db = null;
+try {
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+} catch (err) {
+  console.error('Firebase初期化に失敗しました。firebaseConfigを確認してください。', err);
+}
+</script>
 
-let gasUrl = localStorage.getItem('gasUrl') || DEFAULT_GAS_URL;
-let storeList = ['博多住吉通り店', '清川二丁目店'];
-let currentStore = '清川二丁目店';
-let isLoadedFromSheets = false;
+<script>
+let currentUser = null;
+let storeList = [];
+let currentStore = '';
+let isDataLoaded = false;
 let autoSaveTimer = null;
 
 let slotData = [
@@ -888,21 +924,8 @@ let slotData = [
   { name: '準夜勤/フォロー', start: '22:00', end: '03:00', slots: 1, colorClass: 'bg-subnight' }
 ];
 
-let staffList = [
-  { id: '1', name: '下城', days: ['月','火','水','土','日'], time: '夜勤', note: '夜勤メイン。トラブル対応可能。' },
-  { id: '16', name: 'スレンドラ', days: ['月','火','水','木','金','土','日'], time: '全時間帯', note: '売上貢献高。ワンオペ可。' },
-  { id: '31', name: '岡本', days: ['月','火','金'], time: '朝勤', note: 'レジ中心。' },
-  { id: '5', name: '山領', days: ['月','火','金','日'], time: '夕勤', note: 'FF・品出し得意。' },
-  { id: '29', name: 'プラティ', days: ['月','火','水','木','金'], time: '昼勤', note: '品出し・清掃迅速。' }
-];
-
-const HISTORICAL_6MONTH_DATA = {
-  '下城': { prescribed: 133, urgentOff: 0, reqOff: 0, helpCount: 0 },
-  'スレンドラ': { prescribed: 133, urgentOff: 0, reqOff: 0, helpCount: 0 },
-  '岡本': { prescribed: 133, urgentOff: 0, reqOff: 0, helpCount: 0 },
-  'プラティ': { prescribed: 133, urgentOff: 0, reqOff: 0, helpCount: 0 },
-  '山領': { prescribed: 106, urgentOff: 0, reqOff: 2, helpCount: 0 }
-};
+let staffList = [];
+const HISTORICAL_6MONTH_DATA = {};
 
 // =================================================================
 // 日本の祝日（ハッピーマンデー・春分秋分・振替休日対応）自動算出関数
@@ -966,9 +989,7 @@ function getHolidayName(dateObj) {
   return "";
 }
 
-let fixedAssignments = {
-  '1_0': '岡本', '2_0': 'プラティ', '3_0': '山領', '4_0': 'スレンドラ', '5_0': '恵良', '6_0': '下城'
-};
+let fixedAssignments = {};
 
 let calAssignments = {};
 let offRequestsStore = {};
@@ -1034,9 +1055,10 @@ function promptRenameStore() {
 
 function switchStore(storeName) {
   currentStore = storeName;
-  isLoadedFromSheets = false;
+  localStorage.setItem('lastStore', storeName);
+  isDataLoaded = false;
   document.getElementById('off-staff-select').innerHTML = '';
-  loadAllFromSheets();
+  loadAllFromFirestore();
 }
 
 function recalculateAll() {
@@ -1918,76 +1940,93 @@ function toggleManagerApproval(key, isChecked) {
 }
 
 function autoSave() {
-  if (!gasUrl || !isLoadedFromSheets) return;
+  if (!currentUser || !isDataLoaded) return;
   clearTimeout(autoSaveTimer);
   let statusBadge = document.getElementById('sync-status');
   statusBadge.className = 'sync-badge sync-saving';
   statusBadge.innerText = 'クラウド自動保存中...';
 
   autoSaveTimer = setTimeout(() => {
-    saveAllToSheets();
+    saveAllToFirestore();
   }, 1000);
 }
 
-function saveGasUrlAndLoad() {
-  let url = document.getElementById('gas-url-input').value.trim();
-  if (!url) { alert('Web App URLを入力してください'); return; }
-  gasUrl = url;
-  localStorage.setItem('gasUrl', gasUrl);
-  loadAllFromSheets();
+function signOutUser() {
+  auth.signOut();
 }
 
-function loadAllFromSheets() {
-  if (!gasUrl) return;
+async function initAfterLogin() {
+  let storeListDoc;
+  try {
+    storeListDoc = await db.collection('meta').doc('storeList').get();
+  } catch (err) {
+    console.error(err);
+    alert('店舗一覧の読み込みに失敗しました。通信環境をご確認の上、再読み込みしてください。');
+    return;
+  }
+
+  storeList = (storeListDoc.exists && storeListDoc.data().list && storeListDoc.data().list.length > 0)
+    ? storeListDoc.data().list
+    : [];
+
+  if (storeList.length === 0) {
+    let newName = (prompt('店舗名を入力してください(最初の店舗を作成します):', '') || '新規店舗').trim() || '新規店舗';
+    storeList = [newName];
+  }
+
+  let lastStore = localStorage.getItem('lastStore');
+  currentStore = (lastStore && storeList.includes(lastStore)) ? lastStore : storeList[0];
+
+  renderStoreSelect();
+  await loadAllFromFirestore();
+}
+
+async function loadAllFromFirestore() {
+  if (!currentUser) return;
   let statusBadge = document.getElementById('sync-status');
   statusBadge.className = 'sync-badge sync-saving';
   statusBadge.innerText = 'クラウド読み込み中...';
 
-  fetch(gasUrl + '?store=' + encodeURIComponent(currentStore))
-    .then(res => res.json())
-    .then(data => {
-      if (data.storeList && data.storeList.length > 0) {
-        storeList = data.storeList;
-        renderStoreSelect();
-      }
-      if (data.slotData && data.slotData.length > 0) slotData = data.slotData;
-      if (data.staffList) {
-        let uniq = [];
-        let seen = {};
-        data.staffList.forEach(s => {
-          let k = (s.id || '') + '_' + (s.name || '');
-          if (s.name && !seen[k]) {
-            seen[k] = true;
-            uniq.push(s);
-          }
-        });
-        staffList = uniq;
-      }
-      if (data.fixedAssignments) fixedAssignments = data.fixedAssignments;
-      if (data.calAssignments) calAssignments = data.calAssignments;
-      if (data.offRequestsStore) offRequestsStore = data.offRequestsStore;
-      if (data.config) {
-        document.getElementById('min-wage').value = data.config.minWage || 992;
-        document.getElementById('night-rate').value = data.config.nightRate || 1.25;
-      }
-      isLoadedFromSheets = true;
-      recalculateAll();
-      renderStaffTable();
-      statusBadge.className = 'sync-badge sync-ok';
-      statusBadge.innerText = '🟢 自動同期中 (最新データ)';
-    })
-    .catch(err => {
-      console.error(err);
-      statusBadge.className = 'sync-badge sync-saving';
-      statusBadge.innerText = '⚠️ 同期エラー';
-    });
+  try {
+    let docSnap = await db.collection('stores').doc(currentStore).get();
+    let data = docSnap.exists ? docSnap.data() : {};
+
+    if (data.slotData && data.slotData.length > 0) slotData = data.slotData;
+    if (data.staffList) {
+      let uniq = [];
+      let seen = {};
+      data.staffList.forEach(s => {
+        let k = (s.id || '') + '_' + (s.name || '');
+        if (s.name && !seen[k]) {
+          seen[k] = true;
+          uniq.push(s);
+        }
+      });
+      staffList = uniq;
+    }
+    if (data.fixedAssignments) fixedAssignments = data.fixedAssignments;
+    if (data.calAssignments) calAssignments = data.calAssignments;
+    if (data.offRequestsStore) offRequestsStore = data.offRequestsStore;
+    if (data.config) {
+      document.getElementById('min-wage').value = data.config.minWage || 992;
+      document.getElementById('night-rate').value = data.config.nightRate || 1.25;
+    }
+    isDataLoaded = true;
+    recalculateAll();
+    renderStaffTable();
+    statusBadge.className = 'sync-badge sync-ok';
+    statusBadge.innerText = '🟢 自動同期中 (最新データ)';
+  } catch (err) {
+    console.error(err);
+    statusBadge.className = 'sync-badge sync-saving';
+    statusBadge.innerText = '⚠️ 同期エラー';
+  }
 }
 
-function saveAllToSheets() {
-  if (!gasUrl || !isLoadedFromSheets) return;
+function saveAllToFirestore() {
+  if (!currentUser || !isDataLoaded) return;
 
   let payload = {
-    storeList: storeList,
     slotData: slotData,
     staffList: staffList,
     fixedAssignments: fixedAssignments,
@@ -2000,18 +2039,19 @@ function saveAllToSheets() {
     }
   };
 
-  fetch(gasUrl, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(() => {
-    let statusBadge = document.getElementById('sync-status');
-    statusBadge.className = 'sync-badge sync-ok';
-    statusBadge.innerText = '🟢 自動保存完了';
-  }).catch(err => {
-    console.error(err);
-  });
+  let statusBadge = document.getElementById('sync-status');
+
+  db.collection('stores').doc(currentStore).set(payload)
+    .then(() => db.collection('meta').doc('storeList').set({ list: storeList }))
+    .then(() => {
+      statusBadge.className = 'sync-badge sync-ok';
+      statusBadge.innerText = '🟢 自動保存完了';
+    })
+    .catch(err => {
+      console.error(err);
+      statusBadge.className = 'sync-badge sync-saving';
+      statusBadge.innerText = '⚠️ 保存エラー';
+    });
 }
 
 function triggerPrint(targetTab) {
@@ -2031,14 +2071,37 @@ function switchTab(tabId) {
   event.currentTarget.classList.add('active');
 }
 
-// 初期化
-renderStoreSelect();
-if (gasUrl) {
-  document.getElementById('gas-url-input').value = gasUrl;
-  loadAllFromSheets();
+// 初期化 (ログイン状態を監視し、ログイン済みならFirestoreから読み込む)
+document.getElementById('login-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  let errEl = document.getElementById('login-error');
+  errEl.innerText = '';
+  if (!auth) {
+    errEl.innerText = 'Firebase設定が未投入です。管理者にお問い合わせください。';
+    return;
+  }
+  let email = document.getElementById('login-email').value.trim();
+  let password = document.getElementById('login-password').value;
+  auth.signInWithEmailAndPassword(email, password).catch(err => {
+    errEl.innerText = 'ログインに失敗しました。メールアドレスとパスワードをご確認ください。';
+    console.error(err);
+  });
+});
+
+if (auth) {
+  auth.onAuthStateChanged(function(user) {
+    if (user) {
+      currentUser = user;
+      document.getElementById('login-overlay').style.display = 'none';
+      initAfterLogin();
+    } else {
+      currentUser = null;
+      isDataLoaded = false;
+      document.getElementById('login-overlay').style.display = 'flex';
+    }
+  });
 } else {
-  recalculateAll();
-  renderStaffTable();
+  document.getElementById('login-error').innerText = 'Firebase設定が未投入です。管理者にお問い合わせください。';
 }
 </script>
 
