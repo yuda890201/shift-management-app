@@ -1393,12 +1393,18 @@ function updateSidebarStats() {
   });
 }
 
+function parseBaseDate(input) {
+  let d = new Date(input || '2026-08-01');
+  if (isNaN(d.getTime())) d = new Date('2026-08-01');
+  return d;
+}
+
 function initCalendarTabControls() {
   let picker = document.getElementById('cal-month-picker');
   picker.innerHTML = '';
 
   let baseInput = document.getElementById('cal-base-date').value;
-  let baseDate = new Date(baseInput || '2026-08-01');
+  let baseDate = parseBaseDate(baseInput);
 
   for (let i = 0; i < 12; i++) {
     let d = new Date(baseDate.getFullYear(), baseDate.getMonth() + i, 1);
@@ -1413,6 +1419,7 @@ function initCalendarTabControls() {
 
 function onMonthPickerChange() {
   let ym = document.getElementById('cal-month-picker').value;
+  if (!/^\d{4}-\d{2}$/.test(ym)) return;
   document.getElementById('cal-base-date').value = ym + '-01';
   renderCalendarTab();
   autoSave();
@@ -1423,7 +1430,7 @@ function renderCalendarTab() {
 
   let mode = document.getElementById('cal-mode-select').value;
   let baseInput = document.getElementById('cal-base-date').value;
-  let baseDate = new Date(baseInput || '2026-08-01');
+  let baseDate = parseBaseDate(baseInput);
 
   if (mode === 'month') {
     document.getElementById('cal-month-view').style.display = 'block';
@@ -1653,7 +1660,7 @@ function renderOffInputTab() {
 
   let selectedStaff = selectEl.value || (staffList[0] ? staffList[0].name : '');
   let baseInput = document.getElementById('off-base-date').value;
-  let baseDate = new Date(baseInput || '2026-08-01');
+  let baseDate = parseBaseDate(baseInput);
 
   let urgentTbody = document.getElementById('off-urgent-tbody');
   let normalTbody = document.getElementById('off-normal-tbody');
