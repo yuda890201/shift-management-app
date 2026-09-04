@@ -605,7 +605,7 @@
 
   <div id="toast-container" class="toast-container no-print"></div>
 
-  <nav class="navbar no-print">
+  <nav id="main-navbar" class="navbar no-print">
     <div class="nav-brand">🏪 シフト管理アプリ <small style="font-size:12px; color:gray;">(全自動クラウド同期)</small></div>
     <div class="nav-tabs">
       <button class="tab-btn active" onclick="switchTab('tab-slots')">① シフト枠設定</button>
@@ -614,10 +614,11 @@
       <button class="tab-btn" onclick="switchTab('tab-calendar')">④ 暦シフト表</button>
       <button class="tab-btn" onclick="switchTab('tab-off-input')">⑤ 休み実績入力</button>
       <button class="tab-btn" onclick="switchTab('tab-help')">⑥ ヘルプ募集</button>
+      <button class="tab-btn" onclick="switchTab('tab-spotworkers')">⑦ スポットワーカー管理</button>
     </div>
   </nav>
 
-  <div class="container">
+  <div id="main-container" class="container">
 
     <!-- クラウド同期ステータス -->
     <div class="controls-row sync-status-row no-print" style="justify-content:space-between;">
@@ -982,6 +983,62 @@
       </div>
     </div>
 
+    <!-- ⑦ スポットワーカー管理タブ -->
+    <div id="tab-spotworkers" class="tab-content">
+      <h2>スポットワーカー管理</h2>
+      <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px;">
+        ※店舗に所属しない日雇い契約のスタッフ(スポットワーカー)を登録します。登録されたメールアドレスでログインすると、
+        通常の管理画面の代わりに、全店舗の「募集中の空きシフト」だけを閲覧・立候補できる専用画面が表示されます。
+        ログイン用のメールアドレス・パスワード自体は、通常のスタッフと同様にFirebase Authenticationの「Users」タブで発行してください。
+      </p>
+      <div style="display:flex; justify-content:flex-end; margin-bottom:12px;">
+        <button class="btn btn-success" onclick="promptAddSpotWorker()">+ スポットワーカーを登録</button>
+      </div>
+      <div class="table-responsive"><table>
+        <thead>
+          <tr>
+            <th style="width:260px;">メールアドレス</th>
+            <th style="width:160px;">氏名</th>
+            <th style="width:100px;">状態</th>
+            <th style="width:160px;">操作</th>
+          </tr>
+        </thead>
+        <tbody id="spotworkers-table-body"></tbody>
+      </table></div>
+    </div>
+
+  </div>
+
+  <!-- スポットワーカー専用画面(通常の管理画面の代わりに全画面表示) -->
+  <div id="spot-worker-view" style="display:none;">
+    <nav class="navbar no-print">
+      <div class="nav-brand">🧑‍🔧 スポットワーカー用 空きシフト一覧</div>
+      <div>
+        <span id="spot-worker-name" style="font-size:13px; color:var(--text-muted); margin-right:12px;"></span>
+        <button class="btn" onclick="loadSpotWorkerPostings()">🔄 更新</button>
+        <button class="btn" onclick="signOutUser()">ログアウト</button>
+      </div>
+    </nav>
+    <div class="container">
+      <div class="tab-content active">
+        <h2>募集中の空きシフト一覧</h2>
+        <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:12px;">
+          ※全店舗で募集中の空きシフトです。「応募する」にチェックを入れると、その店舗の責任者に立候補が伝わります。
+        </p>
+        <div class="table-responsive"><table>
+          <thead>
+            <tr>
+              <th style="width:110px;">店舗</th>
+              <th style="width:70px;">区分</th>
+              <th style="width:120px;">勤務日</th>
+              <th style="width:180px;">時間帯・区分</th>
+              <th style="width:150px;">応募</th>
+            </tr>
+          </thead>
+          <tbody id="spot-worker-postings-tbody"></tbody>
+        </table></div>
+      </div>
+    </div>
   </div>
 
 <!-- Firebase (Firestore + Authentication) -->
@@ -1115,6 +1172,15 @@ let calAssignments = {};
 let offRequestsStore = {};
 let otherStoresHelp = {}; // { storeName: offRequestsStore of that store }
 const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
+
+// ==== スポットワーカー(店舗に所属しない日雇いスタッフ)関連 ====
+let currentSpotWorker = null; // { email, name } ログイン中の本人がスポットワーカーの場合のみセット
+let spotWorkerRegistry = []; // 管理画面用: [{ email, name, active }]
+let myStorePostingsCandidates = {}; // 自店舗の募集キーごとのスポットワーカー立候補一覧 { key: { uid: {name, ts} } }
+
+function encodePostingId(storeId, key) {
+  return encodeURIComponent(storeId) + '__' + encodeURIComponent(key);
+}
 
 function timeToHours(timeStr) {
   const parts = timeStr.split(':');
@@ -2040,6 +2106,11 @@ function renderHelpTab() {
       if (!candNames.includes(name)) candNames.push(name);
     });
 
+    // スポットワーカーからの立候補（openShiftPostingsにミラーされたもの）は読み取り専用で表示し、
+    // 決定用ドロップダウンの選択肢には「氏名（スポット）」として追加する
+    let spotCandidates = myStorePostingsCandidates[key] || {};
+    let spotCandNames = Object.values(spotCandidates).map(c => `${c.name}（スポット）`);
+
     let candHtml = '<div style="display:flex; flex-direction:column; gap:4px;">';
     candNames.forEach(name => {
       let isCand = req.candidates && req.candidates[name];
@@ -2056,7 +2127,17 @@ function renderHelpTab() {
         </div>
       `;
     });
+    Object.values(spotCandidates).forEach(c => {
+      candHtml += `
+        <div class="candidate-item">
+          <strong>${c.name}（スポット）</strong>
+          <span class="candidate-timestamp">⏱ ${c.ts}</span>
+        </div>
+      `;
+    });
     candHtml += '</div>';
+
+    candNames = candNames.concat(spotCandNames);
 
     let managerHtml = `<div>`;
     let finalized = req.finalizedStaff || '';
@@ -2064,7 +2145,7 @@ function renderHelpTab() {
     let selHtml = `<select class="editable-input" id="mgr-select-${key}" style="font-size:12px; margin-bottom:4px;" ${finalized ? 'disabled' : ''}>`;
     selHtml += `<option value="">-- 決定スタッフを選択 --</option>`;
     candNames.forEach(name => {
-      let isCand = req.candidates && req.candidates[name];
+      let isCand = (req.candidates && req.candidates[name]) || spotCandNames.includes(name);
       let sel = (finalized === name) ? 'selected' : '';
       selHtml += `<option value="${name}" ${sel}>${name} ${isCand ? '[候補あり]' : ''}</option>`;
     });
@@ -2137,7 +2218,7 @@ async function loadOtherStoresHelp() {
 }
 
 function refreshOtherStoresHelp() {
-  loadOtherStoresHelp().then(() => {
+  Promise.all([loadOtherStoresHelp(), loadMyStorePostingsCandidates()]).then(() => {
     renderHelpTab();
     showToast('他店舗のヘルプ状況を更新しました。', 'success');
   }).catch(err => {
@@ -2234,6 +2315,165 @@ async function toggleCrossStoreCandidate(targetStore, key, staffName, isChecked)
   showToast(isChecked ? `${targetStore}のヘルプに立候補しました。` : '立候補を取り消しました。', 'success');
 }
 
+// =================================================================
+// スポットワーカー管理(⑦タブ): メールアドレス→氏名の登録・削除
+// =================================================================
+async function loadSpotWorkers() {
+  spotWorkerRegistry = [];
+  if (!db) return;
+  try {
+    let snap = await db.collection('spotWorkers').get();
+    snap.forEach(doc => {
+      spotWorkerRegistry.push({ email: doc.id, name: doc.data().name || '', active: doc.data().active !== false });
+    });
+    spotWorkerRegistry.sort((a, b) => a.email.localeCompare(b.email));
+  } catch (err) {
+    console.error('スポットワーカー一覧の取得に失敗しました:', err);
+  }
+}
+
+function renderSpotWorkersTab() {
+  let tbody = document.getElementById('spotworkers-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  spotWorkerRegistry.forEach(sw => {
+    let tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${sw.email}</td>
+      <td>${sw.name}</td>
+      <td>${sw.active ? '<span style="color:var(--success); font-weight:bold;">有効</span>' : '<span style="color:var(--text-muted);">無効</span>'}</td>
+      <td>
+        <button class="btn" style="padding:3px 8px; font-size:11px;" onclick="toggleSpotWorkerActive('${sw.email}', ${!sw.active})">${sw.active ? '無効化' : '有効化'}</button>
+        <button class="btn btn-danger" style="padding:3px 8px; font-size:11px;" onclick="removeSpotWorker('${sw.email}')">削除</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (spotWorkerRegistry.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:gray; text-align:center;">※スポットワーカーはまだ登録されていません。</td></tr>';
+  }
+}
+
+function promptAddSpotWorker() {
+  let email = (prompt('スポットワーカーのメールアドレスを入力してください:\n(あらかじめFirebase Authenticationの「Users」タブでログイン用アカウントを発行しておいてください)', '') || '').trim();
+  if (!email) return;
+  let name = (prompt('氏名を入力してください:', '') || '').trim();
+  if (!name) return;
+
+  db.collection('spotWorkers').doc(email).set({ name: name, active: true })
+    .then(() => {
+      showToast(`${name}さんをスポットワーカーとして登録しました。`, 'success');
+      return loadSpotWorkers();
+    })
+    .then(renderSpotWorkersTab)
+    .catch(err => {
+      console.error(err);
+      showToast('スポットワーカーの登録に失敗しました。通信環境をご確認ください。', 'error');
+    });
+}
+
+function toggleSpotWorkerActive(email, makeActive) {
+  db.collection('spotWorkers').doc(email).update({ active: makeActive })
+    .then(() => loadSpotWorkers())
+    .then(renderSpotWorkersTab)
+    .catch(err => {
+      console.error(err);
+      showToast('更新に失敗しました。通信環境をご確認ください。', 'error');
+    });
+}
+
+function removeSpotWorker(email) {
+  if (!confirm(`${email} をスポットワーカー登録から削除しますか？`)) return;
+  db.collection('spotWorkers').doc(email).delete()
+    .then(() => loadSpotWorkers())
+    .then(renderSpotWorkersTab)
+    .catch(err => {
+      console.error(err);
+      showToast('削除に失敗しました。通信環境をご確認ください。', 'error');
+    });
+}
+
+// =================================================================
+// スポットワーカー専用画面: 全店舗の募集中の空きシフトの閲覧・立候補
+// =================================================================
+async function loadSpotWorkerPostings() {
+  if (!db) return;
+  let tbody = document.getElementById('spot-worker-postings-tbody');
+  try {
+    let snap = await db.collection('openShiftPostings').get();
+    let rows = [];
+    snap.forEach(doc => rows.push({ id: doc.id, data: doc.data() }));
+    rows.sort((a, b) => (a.data.dateStr || '').localeCompare(b.data.dateStr || ''));
+    renderSpotWorkerPostings(rows);
+  } catch (err) {
+    console.error(err);
+    showToast('空きシフト情報の取得に失敗しました。通信環境をご確認ください。', 'error');
+  }
+}
+
+function renderSpotWorkerPostings(rows) {
+  let tbody = document.getElementById('spot-worker-postings-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  rows.forEach(({ id, data }) => {
+    let myEntry = (data.candidates || {})[currentUser.uid];
+    let checked = myEntry ? 'checked' : '';
+    let tsText = myEntry ? `<span class="candidate-timestamp">⏱ ${myEntry.ts}</span>` : '';
+    let urgentTag = data.isUrgent
+      ? '<span style="color:#e53e3e; font-weight:bold; font-size:11px;">緊急</span>'
+      : '<span style="color:var(--text-muted); font-size:11px;">通常</span>';
+
+    let tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="sidebar-stat-badge">${data.storeId}</span></td>
+      <td>${urgentTag}</td>
+      <td><strong>${data.dateStr}</strong></td>
+      <td><span class="sidebar-stat-badge">${data.slotName}</span></td>
+      <td>
+        <label style="cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <input type="checkbox" ${checked} onchange="toggleSpotWorkerCandidacy('${id}', this.checked)">
+          応募する
+        </label>
+        ${tsText}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:gray; text-align:center;">※現在、募集中の空きシフトはありません。</td></tr>';
+  }
+}
+
+async function toggleSpotWorkerCandidacy(postingId, isChecked) {
+  if (!db || !currentSpotWorker) return;
+  let fieldPath = new firebase.firestore.FieldPath('candidates', currentUser.uid);
+  let fieldValue = isChecked
+    ? { name: currentSpotWorker.name, ts: nowTimestampShort() }
+    : firebase.firestore.FieldValue.delete();
+
+  try {
+    await db.collection('openShiftPostings').doc(postingId).update(fieldPath, fieldValue);
+    showToast(isChecked ? '応募しました。' : '応募を取り消しました。', 'success');
+    loadSpotWorkerPostings();
+  } catch (err) {
+    console.error(err);
+    showToast('応募の送信に失敗しました。通信環境をご確認ください。', 'error');
+    loadSpotWorkerPostings();
+  }
+}
+
+function initSpotWorkerView() {
+  document.getElementById('main-navbar').style.display = 'none';
+  document.getElementById('main-container').style.display = 'none';
+  document.getElementById('spot-worker-view').style.display = 'block';
+  document.getElementById('spot-worker-name').innerText = `${currentSpotWorker.name} さん`;
+  loadSpotWorkerPostings();
+}
+
 function toggleManagerApproval(key, isChecked) {
   if (offRequestsStore[key]) {
     let selectEl = document.getElementById(`mgr-select-${key}`);
@@ -2276,6 +2516,21 @@ function signOutUser() {
 
 async function initAfterLogin() {
   setAppLoading(true);
+
+  // ログイン中のメールアドレスがスポットワーカーとして登録されているか確認し、
+  // 登録されていれば通常の管理画面ではなくスポットワーカー専用画面を表示する
+  try {
+    let spotDoc = await db.collection('spotWorkers').doc(currentUser.email).get();
+    if (spotDoc.exists && spotDoc.data().active !== false) {
+      currentSpotWorker = { email: currentUser.email, name: spotDoc.data().name || currentUser.email };
+      setAppLoading(false);
+      initSpotWorkerView();
+      return;
+    }
+  } catch (err) {
+    console.error('スポットワーカー判定に失敗しました:', err);
+  }
+
   let storeListDoc;
   try {
     storeListDoc = await db.collection('meta').doc('storeList').get();
@@ -2300,6 +2555,8 @@ async function initAfterLogin() {
 
   renderStoreSelect();
   await loadAllFromFirestore();
+  await loadSpotWorkers();
+  renderSpotWorkersTab();
   setAppLoading(false);
 }
 
@@ -2337,7 +2594,7 @@ async function loadAllFromFirestore() {
     isDataLoaded = true;
     recalculateAll();
     renderStaffTable();
-    loadOtherStoresHelp().then(() => renderHelpTab());
+    Promise.all([loadOtherStoresHelp(), loadMyStorePostingsCandidates()]).then(() => renderHelpTab());
     statusBadge.className = 'sync-badge sync-ok';
     statusBadge.innerText = '🟢 自動同期中 (最新データ)';
   } catch (err) {
@@ -2372,6 +2629,7 @@ function saveAllToFirestore() {
     .then(() => {
       statusBadge.className = 'sync-badge sync-ok';
       statusBadge.innerText = '🟢 自動保存完了';
+      syncOpenShiftPostings();
     })
     .catch(err => {
       console.error(err);
@@ -2379,6 +2637,72 @@ function saveAllToFirestore() {
       statusBadge.innerText = '⚠️ 保存エラー';
       showToast('データの保存に失敗しました。通信環境をご確認ください。', 'error');
     });
+}
+
+// =================================================================
+// スポットワーカー(店舗に所属しない日雇いスタッフ)向け「募集中の空きシフト」ミラー同期
+// stores/{storeId} には時給・スタッフ名簿など機密情報が含まれるため、
+// スポットワーカーには読ませない。openShiftPostings には安全な項目のみを
+// ミラーし、スポットワーカーはこのコレクションだけを読み書きできる。
+// =================================================================
+async function syncOpenShiftPostings() {
+  if (!db || !currentStore) return;
+  try {
+    let existingSnap = await db.collection('openShiftPostings').where('storeId', '==', currentStore).get();
+    let existingIds = new Set(existingSnap.docs.map(d => d.id));
+    let desiredIds = new Set();
+
+    let batch = db.batch();
+
+    Object.keys(offRequestsStore).forEach(key => {
+      let req = offRequestsStore[key];
+      if (req.finalizedStaff) return; // 決定済みは募集終了なのでミラーしない
+
+      let postingId = encodePostingId(currentStore, key);
+      desiredIds.add(postingId);
+      let docRef = db.collection('openShiftPostings').doc(postingId);
+      let payload = {
+        storeId: currentStore,
+        key: key,
+        dateStr: req.dateStr,
+        slotName: req.slotName,
+        isUrgent: !!req.isUrgent
+      };
+
+      if (existingIds.has(postingId)) {
+        // candidatesフィールドには触れない(スポットワーカーが立候補した内容を消さないため)
+        batch.update(docRef, payload);
+      } else {
+        batch.set(docRef, Object.assign({ candidates: {} }, payload));
+      }
+    });
+
+    existingIds.forEach(id => {
+      if (!desiredIds.has(id)) {
+        batch.delete(db.collection('openShiftPostings').doc(id));
+      }
+    });
+
+    if (desiredIds.size > 0 || existingIds.size > 0) {
+      await batch.commit();
+    }
+  } catch (err) {
+    console.error('募集中シフト情報の同期に失敗しました:', err);
+  }
+}
+
+async function loadMyStorePostingsCandidates() {
+  myStorePostingsCandidates = {};
+  if (!db || !currentStore) return;
+  try {
+    let snap = await db.collection('openShiftPostings').where('storeId', '==', currentStore).get();
+    snap.forEach(doc => {
+      let data = doc.data();
+      myStorePostingsCandidates[data.key] = data.candidates || {};
+    });
+  } catch (err) {
+    console.error('スポットワーカーの立候補状況の取得に失敗しました:', err);
+  }
 }
 
 function triggerPrint(targetTab) {
@@ -2432,7 +2756,11 @@ if (auth) {
       initAfterLogin();
     } else {
       currentUser = null;
+      currentSpotWorker = null;
       isDataLoaded = false;
+      document.getElementById('main-navbar').style.display = '';
+      document.getElementById('main-container').style.display = '';
+      document.getElementById('spot-worker-view').style.display = 'none';
       document.getElementById('login-overlay').style.display = 'flex';
     }
   });
