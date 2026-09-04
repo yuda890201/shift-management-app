@@ -546,6 +546,7 @@
     body * { visibility: hidden; }
     .printable-area, .printable-area * { visibility: visible; }
     .printable-area { position: absolute; left: 0; top: 0; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+    .print-preview-container { border: none !important; border-radius: 0 !important; box-shadow: none !important; }
     .no-print { display: none !important; }
     select, input {
       -webkit-appearance: none !important; -moz-appearance: none !important; appearance: none !important;
@@ -728,12 +729,12 @@
 
     <!-- ③ 一週間の固定シフト表画面 -->
     <div id="tab-fixed" class="tab-content">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div class="no-print" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <h2>基本（モデル）週間固定シフト表</h2>
         <button class="btn btn-success" onclick="triggerPrint('fixed')">🖨️ 固定シフト表＆ガントチャートを印刷</button>
       </div>
 
-      <div class="fixed-shift-layout">
+      <div class="fixed-shift-layout no-print">
         <div>
           <p style="font-size:12.5px; color:var(--text-muted); margin-top:0; margin-bottom:10px;">
             ※選択項目のカッコ内には各スタッフの「希望曜日」および「希望時間帯」が表示されます。選択に応じてサイドバーおよび下部の(月)〜(日)週間ガントチャートがリアルタイム更新されます。
@@ -759,15 +760,16 @@
       </div>
 
       <div class="print-preview-container printable-area" style="margin-top:28px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--primary); padding-bottom:8px; margin-bottom:16px;">
-          <h3 style="margin:0; color:var(--primary); font-size:16px;">【印刷プレビュー】基本週間固定シフト表 ＆ 曜日別(月〜日)ガントチャート</h3>
-          <span style="font-size:12px; color:var(--text-muted);">店舗名: <span id="preview-store-name"></span></span>
+        <div class="no-print" style="font-size:12px; color:var(--text-muted); margin-bottom:8px;">👇 以下が印刷される内容のプレビューです</div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid var(--primary); padding-bottom:8px; margin-bottom:14px;">
+          <h3 style="margin:0; color:var(--primary); font-size:16px;"><span id="preview-store-name"></span> 週間固定シフト表</h3>
+          <span style="font-size:11px; color:var(--text-muted);" id="preview-print-date"></span>
         </div>
 
-        <h4 style="font-size:14px; margin:10px 0 6px 0;">■ 週間固定シフト配置表</h4>
-        <table id="preview-fixed-table" style="font-size:12px; margin-bottom:20px;"></table>
+        <h4 style="font-size:13px; margin:0 0 4px 0;">週間固定シフト配置表</h4>
+        <table id="preview-fixed-table" style="font-size:12px; margin-bottom:16px;"></table>
 
-        <h4 style="font-size:14px; margin:16px 0 6px 0;">■ 曜日別 (月)〜(日) 24時間ガントチャート（配置スタッフ名反映）</h4>
+        <h4 style="font-size:13px; margin:0 0 4px 0;">曜日別(月〜日) 24時間ガントチャート</h4>
         <div id="fixed-gantt-by-day-container" class="week-gantt-container"></div>
       </div>
     </div>
@@ -2165,6 +2167,9 @@ function triggerPrint(targetTab) {
   let storeName = document.getElementById('store-select').value;
   if (targetTab === 'fixed') {
     document.getElementById('preview-store-name').innerText = storeName;
+    let now = new Date();
+    document.getElementById('preview-print-date').innerText =
+      `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} 時点`;
   } else if (targetTab === 'off-summary') {
     renderOffSummaryTable();
   }
