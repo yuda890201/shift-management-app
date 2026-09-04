@@ -956,6 +956,30 @@
           <tbody id="help-normal-tbody"></tbody>
         </table></div>
       </div>
+
+      <div style="background:#f0fff4; border:1px solid #9ae6b4; border-radius:6px; padding:16px; margin-top:20px;">
+        <div class="no-print" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h3 style="margin:0; color:#276749; font-size:15px;">🏬 他店舗のヘルプ募集</h3>
+          <button class="btn" onclick="refreshOtherStoresHelp()">🔄 他店舗の状況を更新</button>
+        </div>
+        <p style="font-size:12.5px; color:var(--text-muted); margin-bottom:10px;">
+          ※他店舗が募集しているヘルプ枠です。自店舗のスタッフを立候補させることができます。決定はヘルプ先の店舗の責任者が行います。
+        </p>
+        <div class="table-responsive"><table>
+          <thead>
+            <tr>
+              <th style="width:90px;">店舗</th>
+              <th style="width:60px;">区分</th>
+              <th style="width:110px;">勤務日</th>
+              <th style="width:110px;">休むスタッフ</th>
+              <th style="width:150px;">時間帯・区分</th>
+              <th style="width:220px;">既存の立候補</th>
+              <th style="width:220px;">🙋 自店舗スタッフを立候補させる</th>
+            </tr>
+          </thead>
+          <tbody id="help-other-stores-tbody"></tbody>
+        </table></div>
+      </div>
     </div>
 
   </div>
@@ -1089,6 +1113,7 @@ let fixedAssignments = {};
 
 let calAssignments = {};
 let offRequestsStore = {};
+let otherStoresHelp = {}; // { storeName: offRequestsStore of that store }
 const DOW_OPTIONS = ['月', '火', '水', '木', '金', '土', '日'];
 
 function timeToHours(timeStr) {
@@ -1958,6 +1983,15 @@ function updateOffReason(key, reasonVal) {
   }
 }
 
+function nowTimestampShort() {
+  let now = new Date();
+  let mm = String(now.getMonth() + 1).padStart(2, '0');
+  let dd = String(now.getDate()).padStart(2, '0');
+  let hh = String(now.getHours()).padStart(2, '0');
+  let min = String(now.getMinutes()).padStart(2, '0');
+  return `${mm}/${dd} ${hh}:${min}`;
+}
+
 function renderHelpTab() {
   let urgentTbody = document.getElementById('help-urgent-tbody');
   let normalTbody = document.getElementById('help-normal-tbody');
@@ -1970,23 +2004,27 @@ function renderHelpTab() {
     let req = offRequestsStore[key];
     let tr = document.createElement('tr');
 
-    let candHtml = '<div style="display:flex; flex-direction:column; gap:4px;">';
-    staffList.forEach(s => {
-      if (s.name !== req.staffName) {
-        let isCand = req.candidates && req.candidates[s.name];
-        let checked = isCand ? 'checked' : '';
-        let tsText = isCand ? `<span class="candidate-timestamp">⏱ ${req.candidates[s.name]}</span>` : '';
+    // 自店舗スタッフに加え、他店舗から立候補済みのスタッフ（例:「氏名（他店舗名）」）も候補一覧に含める
+    let candNames = staffList.filter(s => s.name !== req.staffName).map(s => s.name);
+    Object.keys(req.candidates || {}).forEach(name => {
+      if (!candNames.includes(name)) candNames.push(name);
+    });
 
-        candHtml += `
-          <div class="candidate-item">
-            <label style="cursor:pointer; font-weight:normal; display:flex; align-items:center; gap:4px;">
-              <input type="checkbox" ${checked} onchange="toggleHelpCandidate('${key}', '${s.name}', this.checked)">
-              <strong>${s.name}</strong>
-            </label>
-            ${tsText}
-          </div>
-        `;
-      }
+    let candHtml = '<div style="display:flex; flex-direction:column; gap:4px;">';
+    candNames.forEach(name => {
+      let isCand = req.candidates && req.candidates[name];
+      let checked = isCand ? 'checked' : '';
+      let tsText = isCand ? `<span class="candidate-timestamp">⏱ ${req.candidates[name]}</span>` : '';
+
+      candHtml += `
+        <div class="candidate-item">
+          <label style="cursor:pointer; font-weight:normal; display:flex; align-items:center; gap:4px;">
+            <input type="checkbox" ${checked} onchange="toggleHelpCandidate('${key}', '${name}', this.checked)">
+            <strong>${name}</strong>
+          </label>
+          ${tsText}
+        </div>
+      `;
     });
     candHtml += '</div>';
 
@@ -1995,12 +2033,10 @@ function renderHelpTab() {
 
     let selHtml = `<select class="editable-input" id="mgr-select-${key}" style="font-size:12px; margin-bottom:4px;" ${finalized ? 'disabled' : ''}>`;
     selHtml += `<option value="">-- 決定スタッフを選択 --</option>`;
-    staffList.forEach(s => {
-      if (s.name !== req.staffName) {
-        let isCand = req.candidates && req.candidates[s.name];
-        let sel = (finalized === s.name) ? 'selected' : '';
-        selHtml += `<option value="${s.name}" ${sel}>${s.name} ${isCand ? '[候補あり]' : ''}</option>`;
-      }
+    candNames.forEach(name => {
+      let isCand = req.candidates && req.candidates[name];
+      let sel = (finalized === name) ? 'selected' : '';
+      selHtml += `<option value="${name}" ${sel}>${name} ${isCand ? '[候補あり]' : ''}</option>`;
     });
     selHtml += `</select>`;
 
@@ -2035,6 +2071,8 @@ function renderHelpTab() {
   if (normalTbody.children.length === 0) {
     normalTbody.innerHTML = '<tr><td colspan="6" style="color:gray; text-align:center;">※現在、通常のヘルプ募集はありません。</td></tr>';
   }
+
+  renderOtherStoresHelpTable();
 }
 
 function toggleHelpCandidate(key, staffName, isChecked) {
@@ -2043,20 +2081,127 @@ function toggleHelpCandidate(key, staffName, isChecked) {
       offRequestsStore[key].candidates = {};
     }
     if (isChecked) {
-      let now = new Date();
-      let mm = String(now.getMonth() + 1).padStart(2, '0');
-      let dd = String(now.getDate()).padStart(2, '0');
-      let hh = String(now.getHours()).padStart(2, '0');
-      let min = String(now.getMinutes()).padStart(2, '0');
-      let ts = `${mm}/${dd} ${hh}:${min}`;
-
-      offRequestsStore[key].candidates[staffName] = ts;
+      offRequestsStore[key].candidates[staffName] = nowTimestampShort();
     } else {
       delete offRequestsStore[key].candidates[staffName];
     }
     renderHelpTab();
     autoSave();
   }
+}
+
+async function loadOtherStoresHelp() {
+  if (!db) return;
+  otherStoresHelp = {};
+  let others = storeList.filter(s => s !== currentStore);
+  await Promise.all(others.map(async (storeName) => {
+    try {
+      let snap = await db.collection('stores').doc(storeName).get();
+      if (snap.exists) {
+        otherStoresHelp[storeName] = snap.data().offRequestsStore || {};
+      }
+    } catch (err) {
+      console.error('他店舗のヘルプ情報の取得に失敗しました:', storeName, err);
+    }
+  }));
+}
+
+function refreshOtherStoresHelp() {
+  loadOtherStoresHelp().then(() => {
+    renderHelpTab();
+    showToast('他店舗のヘルプ状況を更新しました。', 'success');
+  }).catch(err => {
+    console.error(err);
+    showToast('他店舗のヘルプ状況の更新に失敗しました。', 'error');
+  });
+}
+
+function renderOtherStoresHelpTable() {
+  let tbody = document.getElementById('help-other-stores-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  let rows = [];
+  Object.keys(otherStoresHelp).forEach(storeName => {
+    let storeReqs = otherStoresHelp[storeName] || {};
+    Object.keys(storeReqs).forEach(key => {
+      let req = storeReqs[key];
+      if (!req.finalizedStaff) {
+        rows.push({ storeName, key, req });
+      }
+    });
+  });
+
+  rows.sort((a, b) => (a.req.dateStr || '').localeCompare(b.req.dateStr || ''));
+
+  rows.forEach(({ storeName, key, req }) => {
+    let candKeys = Object.keys(req.candidates || {});
+    let candHtml = candKeys.length > 0
+      ? candKeys.map(name => `<div class="candidate-item"><strong>${name}</strong> <span class="candidate-timestamp">⏱ ${req.candidates[name]}</span></div>`).join('')
+      : '<span style="color:gray; font-size:12px;">まだ立候補なし</span>';
+
+    let applyHtml = '<div style="display:flex; flex-direction:column; gap:4px;">';
+    staffList.forEach(s => {
+      let candidateKey = `${s.name}（${currentStore}）`;
+      let isCand = req.candidates && req.candidates[candidateKey];
+      let checked = isCand ? 'checked' : '';
+      applyHtml += `
+        <label style="cursor:pointer; font-weight:normal; display:flex; align-items:center; gap:4px; font-size:12.5px;">
+          <input type="checkbox" ${checked} onchange="toggleCrossStoreCandidate('${storeName}', '${key}', '${s.name}', this.checked)">
+          ${s.name}
+        </label>
+      `;
+    });
+    applyHtml += '</div>';
+
+    let urgentTag = req.isUrgent
+      ? '<span style="color:#e53e3e; font-weight:bold; font-size:11px;">緊急</span>'
+      : '<span style="color:var(--text-muted); font-size:11px;">通常</span>';
+
+    let tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="sidebar-stat-badge">${storeName}</span></td>
+      <td>${urgentTag}</td>
+      <td><strong>${req.dateStr}</strong></td>
+      <td>${req.staffName}</td>
+      <td><span class="sidebar-stat-badge">${req.slotName}</span></td>
+      <td>${candHtml}</td>
+      <td>${applyHtml}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:gray; text-align:center;">※他店舗の未充足ヘルプ募集は現在ありません。</td></tr>';
+  }
+}
+
+async function toggleCrossStoreCandidate(targetStore, key, staffName, isChecked) {
+  if (!db) return;
+  let candidateKey = `${staffName}（${currentStore}）`;
+  let ts = nowTimestampShort();
+  let fieldPath = new firebase.firestore.FieldPath('offRequestsStore', key, 'candidates', candidateKey);
+  let fieldValue = isChecked ? ts : firebase.firestore.FieldValue.delete();
+
+  try {
+    await db.collection('stores').doc(targetStore).update(fieldPath, fieldValue);
+  } catch (err) {
+    console.error(err);
+    showToast('ヘルプ立候補の送信に失敗しました。通信環境をご確認ください。', 'error');
+    renderHelpTab();
+    return;
+  }
+
+  if (!otherStoresHelp[targetStore]) otherStoresHelp[targetStore] = {};
+  if (!otherStoresHelp[targetStore][key]) otherStoresHelp[targetStore][key] = { candidates: {} };
+  if (!otherStoresHelp[targetStore][key].candidates) otherStoresHelp[targetStore][key].candidates = {};
+  if (isChecked) {
+    otherStoresHelp[targetStore][key].candidates[candidateKey] = ts;
+  } else {
+    delete otherStoresHelp[targetStore][key].candidates[candidateKey];
+  }
+  renderHelpTab();
+  showToast(isChecked ? `${targetStore}のヘルプに立候補しました。` : '立候補を取り消しました。', 'success');
 }
 
 function toggleManagerApproval(key, isChecked) {
@@ -2162,6 +2307,7 @@ async function loadAllFromFirestore() {
     isDataLoaded = true;
     recalculateAll();
     renderStaffTable();
+    loadOtherStoresHelp().then(() => renderHelpTab());
     statusBadge.className = 'sync-badge sync-ok';
     statusBadge.innerText = '🟢 自動同期中 (最新データ)';
   } catch (err) {
