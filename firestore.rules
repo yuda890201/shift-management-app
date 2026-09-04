@@ -1,8 +1,59 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // スポットワーカー(店舗に所属しない日雇いスタッフ)かどうかは、
+    // ログイン中のメールアドレスが spotWorkers コレクションに登録されているかで判定する。
+    // spotWorkers はメールアドレスをドキュメントIDとして管理者が登録する。
+    function isSpotWorker() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/spotWorkers/$(request.auth.token.email));
+    }
+
+    function isStaff() {
+      return isSignedIn() && !isSpotWorker();
+    }
+
+    // openShiftPostings 内、candidates マップのうち自分自身の立候補キー(自分のUID)
+    // 以外が変化していないことを確認する(スポットワーカーは自分の立候補の追加/取り消し以外できない)。
+    function onlySelfCandidacyChanged() {
+      let beforeCandidates = resource.data.candidates != null ? resource.data.candidates : {};
+      let afterCandidates = request.resource.data.candidates;
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['candidates']) &&
+        afterCandidates.diff(beforeCandidates).affectedKeys().hasOnly([request.auth.uid]);
+    }
+
+    // 店舗の全データ(スタッフ名簿・時給・固定シフト・休み希望など)。
+    // スタッフ・管理者のみアクセス可能。スポットワーカーはアクセス不可。
+    match /stores/{storeId} {
+      allow read, write: if isStaff();
+    }
+
+    // 店舗一覧などの共通メタ情報。スポットワーカーはアクセス不可。
+    match /meta/{docId} {
+      allow read, write: if isStaff();
+    }
+
+    // スポットワーカーの登録情報(メールアドレス→氏名)。管理者(スタッフ)のみ登録・変更可能。
+    // 本人がスポットワーカーかどうかの判定にも使うため、読み取りはログイン済み全員に許可する。
+    match /spotWorkers/{email} {
+      allow read: if isSignedIn();
+      allow write: if isStaff();
+    }
+
+    // 全店舗横断の「募集中の空きシフト」一覧。店舗の生データ(時給・スタッフ名簿等)を含まない
+    // 安全な項目のみを持つ別コレクションとして、スタッフ側の書き込み時にミラーする。
+    match /openShiftPostings/{postingId} {
+      allow read: if isSignedIn();
+      // 新規作成・削除(=募集開始・締切)はスタッフ側のみ
+      allow create, delete: if isStaff();
+      // 更新は、スタッフによる通常更新か、スポットワーカーが自分自身の立候補欄だけを
+      // 変更する場合のみ許可する
+      allow update: if isStaff() || (isSpotWorker() && onlySelfCandidacyChanged());
     }
   }
 }
