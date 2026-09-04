@@ -882,7 +882,7 @@
 
         <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--text-muted); margin-bottom:12px;">
           <span>対象店舗: <strong id="off-summary-store-name" style="color:var(--text-main);"></strong></span>
-          <span>集計基準日: <strong id="off-summary-base-date" style="color:var(--text-main);">2026年8月1日</strong> （過去6か月間累計）</span>
+          <span>集計期間: <strong id="off-summary-period" style="color:var(--text-main);"></strong></span>
         </div>
 
         <div class="table-responsive"><table>
@@ -904,8 +904,9 @@
 
         <div style="margin-top:14px; font-size:11.5px; color:var(--text-muted); border-top:1px dashed #cbd5e0; padding-top:8px;">
           <strong>【集計計算ルール】</strong><br>
-          ・出勤率 (%) ＝ (直近6か月出勤日数 ÷ 直近6か月所定労働日数) × 100<br>
-          ・突発休み率 (%) ＝ (直近6か月突発休み日数 ÷ 直近6か月所定労働日数) × 100<br>
+          ・所定労働日数 ＝ 上記集計期間のうち、③固定シフト表でそのスタッフが1枠以上配置されている曜日に該当する日数（1日に複数枠配置されていても1日として計算）<br>
+          ・出勤率 (%) ＝ (集計期間の出勤日数 ÷ 集計期間の所定労働日数) × 100<br>
+          ・突発休み率 (%) ＝ (集計期間の突発休み日数 ÷ 集計期間の所定労働日数) × 100<br>
           ・出勤率100%かつ突発休みなしのスタッフは、次期のシフト組みで最優先（希望通り反映）判定となります。
         </div>
       </div>
@@ -1819,6 +1820,40 @@ function renderOffInputTab() {
   renderOffSummaryTable();
 }
 
+function getPrescribedWeekdaySet(staffName) {
+  let daySet = new Set();
+  Object.keys(fixedAssignments).forEach(key => {
+    if (fixedAssignments[key] === staffName) {
+      daySet.add(parseInt(key.split('_')[1]));
+    }
+  });
+  return daySet;
+}
+
+function countWeekdayOccurrences(startDate, endDate) {
+  // インデックス 0=月, 1=火, ... 6=日 (③固定シフト表のキーと同じ並び)
+  let counts = [0, 0, 0, 0, 0, 0, 0];
+  let cur = new Date(startDate);
+  while (cur <= endDate) {
+    let fixedDayIdx = (cur.getDay() + 6) % 7;
+    counts[fixedDayIdx]++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return counts;
+}
+
+function getSixMonthRange(baseDate) {
+  let end = new Date(baseDate);
+  end.setDate(end.getDate() - 1);
+  let start = new Date(baseDate);
+  start.setMonth(start.getMonth() - 6);
+  return { start, end };
+}
+
+function formatDateJP(d) {
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function renderOffSummaryTable() {
   let summaryTbody = document.getElementById('off-summary-tbody');
   if (!summaryTbody) return;
@@ -1826,14 +1861,18 @@ function renderOffSummaryTable() {
 
   let storeName = document.getElementById('store-select').value;
   let baseInput = document.getElementById('off-base-date').value;
+  let baseDate = parseBaseDate(baseInput);
+
+  let { start: rangeStart, end: rangeEnd } = getSixMonthRange(baseDate);
+  let weekdayCounts = countWeekdayOccurrences(rangeStart, rangeEnd);
 
   let pStore = document.getElementById('off-summary-store-name');
-  let pDate = document.getElementById('off-summary-base-date');
+  let pPeriod = document.getElementById('off-summary-period');
   if (pStore) pStore.innerText = storeName;
-  if (pDate) pDate.innerText = baseInput;
+  if (pPeriod) pPeriod.innerText = `${formatDateJP(rangeStart)} 〜 ${formatDateJP(rangeEnd)}（直近6か月間）`;
 
   staffList.forEach(s => {
-    let hist = HISTORICAL_6MONTH_DATA[s.name] || { prescribed: 106, urgentOff: 0, reqOff: 0, helpCount: 0 };
+    let hist = HISTORICAL_6MONTH_DATA[s.name] || { urgentOff: 0, reqOff: 0, helpCount: 0 };
 
     let currentUrgentOff = 0;
     let currentReqOff = 0;
@@ -1850,10 +1889,13 @@ function renderOffSummaryTable() {
       }
     });
 
-    let totalPrescribed = hist.prescribed;
-    let totalUrgentOff = hist.urgentOff + currentUrgentOff;
-    let totalReqOff = hist.reqOff + currentReqOff;
-    let totalHelpCount = hist.helpCount + currentHelpCount;
+    let prescribedWeekdays = getPrescribedWeekdaySet(s.name);
+    let totalPrescribed = 0;
+    prescribedWeekdays.forEach(dayIdx => { totalPrescribed += weekdayCounts[dayIdx]; });
+
+    let totalUrgentOff = (hist.urgentOff || 0) + currentUrgentOff;
+    let totalReqOff = (hist.reqOff || 0) + currentReqOff;
+    let totalHelpCount = (hist.helpCount || 0) + currentHelpCount;
 
     let totalActualDays = Math.max(0, totalPrescribed - totalUrgentOff - totalReqOff + totalHelpCount);
     let urgentOffRate = (totalPrescribed > 0) ? Math.round((totalUrgentOff / totalPrescribed) * 100) : 0;
