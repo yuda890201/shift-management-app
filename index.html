@@ -1175,9 +1175,34 @@ function promptRenameStore() {
 }
 
 function switchStore(storeName) {
+  if (storeName === currentStore) return;
+
+  // 切り替え前に保留中の自動保存があれば、新しい店舗に切り替わる前に必ず今の店舗へ確定保存する
+  // (保存タイマーをキャンセルせずに切り替えると、タイマー発火時には既に currentStore が
+  //  新しい店舗になっており、古い店舗のデータが新しい店舗のドキュメントに書き込まれてしまう)
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = null;
+    if (isDataLoaded) {
+      saveAllToFirestore();
+    }
+  }
+
   currentStore = storeName;
   localStorage.setItem('lastStore', storeName);
   isDataLoaded = false;
+
+  // 前の店舗のデータがメモリに残ったまま新しい店舗の保存内容に混ざらないよう、
+  // 読み込み前に必ずリセットする(新しい店舗のドキュメントに一部の項目が無い場合の対策)
+  slotData = [];
+  staffList = [];
+  fixedAssignments = {};
+  calAssignments = {};
+  offRequestsStore = {};
+  otherStoresHelp = {};
+  document.getElementById('min-wage').value = 992;
+  document.getElementById('night-rate').value = 1.25;
+
   document.getElementById('off-staff-select').innerHTML = '';
   loadAllFromFirestore();
 }
