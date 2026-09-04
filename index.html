@@ -510,6 +510,29 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   #app-loading-overlay p { margin: 0; color: var(--text-muted); font-size: 13px; font-weight: 600; }
+  .loading-tip-card {
+    max-width: 420px;
+    margin-top: 8px;
+    padding: 14px 18px;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    text-align: left;
+  }
+  .loading-tip-card .loading-tip-title {
+    font-size: 11px;
+    font-weight: bold;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .loading-tip-card .loading-tip-body {
+    font-size: 13px;
+    color: var(--text-main);
+    line-height: 1.5;
+    font-weight: normal;
+  }
 
   .toast-container {
     position: fixed;
@@ -601,6 +624,10 @@
   <div id="app-loading-overlay">
     <div class="loading-spinner"></div>
     <p>クラウドからデータを読み込んでいます…</p>
+    <div class="loading-tip-card">
+      <div class="loading-tip-title">💡 使い方のヒント</div>
+      <div class="loading-tip-body" id="loading-tip-body"></div>
+    </div>
   </div>
 
   <div id="toast-container" class="toast-container no-print"></div>
@@ -1089,8 +1116,38 @@ function showToast(message, type) {
   }, 3200);
 }
 
+const APP_USAGE_TIPS = [
+  '①シフト枠設定タブで「区分名・開始/終了時間・必要枠数」を編集すると、労働時間や人件費、下部のガントチャート、③固定シフト枠数が自動で連動して再計算されます。',
+  '②スタッフ管理タブの「希望曜日」「希望時間帯」は、③固定シフト表でスタッフを割り当てる際の選択肢に(希望:月火水/全時間帯)のように表示され、シフト作成の参考になります。',
+  '③固定シフト表は「基本の週間パターン」です。④暦シフト表で「③の固定シフトを1か月分自動反映」ボタンを押すと、実際のカレンダーにまとめて反映できます。',
+  '④暦シフト表で固定シフトから変更した日は、赤い枠と「変更あり」タグで強調表示されるので、通常と違うシフトの日が一目でわかります。',
+  '⑤休み実績入力タブでは、表示日から15日未満の休みは「🚨緊急」、15〜30日後の休みは「📢通常」の申請として自動的に振り分けられます。',
+  '⑥ヘルプ募集タブの🙋アイコンは「立候補」を表します。スタッフが自分の名前にチェックを入れると、応募した日時が自動で記録されます。',
+  '⑥ヘルプ募集タブの👑アイコンは「責任者決定」を表します。責任者が候補者を選んでチェックを入れると、シフトに確定反映されます。',
+  '🏬アイコンは「他店舗」を表します。⑥ヘルプ募集タブでは、他店舗が募集しているヘルプ枠にも自店舗のスタッフを立候補させることができます。',
+  '🧑‍🔧アイコンは「スポットワーカー(店舗に属さない日雇いスタッフ)」を表します。⑦タブで登録すると、専用ログインで空きシフトの閲覧・応募だけができるようになります。',
+  '画面上部の🟢「自動同期中」は、入力内容がクラウド(Firestore)に自動保存されている状態を示します。オレンジ色になったら通信環境をご確認ください。',
+  '各タブの🖨️印刷ボタンからは、固定シフト表・暦シフト表・労働実績集計表を、必要な情報だけに絞った見やすいレイアウトで印刷できます。',
+  '店舗を切り替えると、編集中の内容は切り替え前の店舗へ自動保存されてから、選んだ店舗のデータに画面が切り替わります。',
+  '出勤率サマリー(⑤タブ下部)の「所定労働日数」は、③固定シフト表でそのスタッフが配置されている曜日をもとに、1日に複数枠入っていても1日として計算されます。'
+];
+
+let loadingTipTimer = null;
+
+function showRandomLoadingTip() {
+  let tipBody = document.getElementById('loading-tip-body');
+  if (!tipBody) return;
+  let tip = APP_USAGE_TIPS[Math.floor(Math.random() * APP_USAGE_TIPS.length)];
+  tipBody.innerText = tip;
+}
+
 function setAppLoading(isLoading) {
   document.getElementById('app-loading-overlay').classList.toggle('visible', isLoading);
+  clearInterval(loadingTipTimer);
+  if (isLoading) {
+    showRandomLoadingTip();
+    loadingTipTimer = setInterval(showRandomLoadingTip, 4000);
+  }
 }
 
 let slotData = [
